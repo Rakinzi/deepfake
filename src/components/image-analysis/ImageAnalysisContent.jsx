@@ -126,7 +126,7 @@ const ImageAnalysisContent = () => {
       {/* Page header */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
         <h1 className="text-2xl font-bold text-gray-800">Face Analysis & Fake Detection</h1>
-        <p className="text-gray-500 mt-1">Upload a face image to analyze and check if it's real or AI-generated using DeepFace.</p>
+        <p className="text-gray-500 mt-1">Upload a face image to analyze and check if it's real or AI-generated.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -232,7 +232,7 @@ const ImageAnalysisContent = () => {
                   <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                     <div className="flex items-center mb-3">
                       <Shield className="w-5 h-5 text-blue-600 mr-2" />
-                      <h3 className="font-medium text-gray-800">DeepFace Anti-Spoofing Results</h3>
+                      <h3 className="font-medium text-gray-800">Results</h3>
                     </div>
                     
                     {analysisResults.faces.map((face, index) => (

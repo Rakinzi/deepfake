@@ -18,18 +18,10 @@ const LoginPage = () => {
     
     setIsLoading(true);
     
-    try {
-      // Mock API call - replace with your actual API endpoint using axios
-      setTimeout(() => {
-        setIsLoading(false);
-        alert('Login successful!');
-        // Redirect logic would go here
-      }, 1500);
-      
-    } catch (error) {
-      setIsLoading(false);
-      alert('Login failed');
-    }
+    // Simply redirect to dashboard after a short delay
+    setTimeout(() => {
+      window.location.href = '/dashboard';
+    }, 800);
   };
 
   return (
@@ -101,7 +93,7 @@ const LoginPage = () => {
             className="mb-10"
           >
             <h2 className="text-3xl font-bold text-black mb-2">Sign In</h2>
-            <p className="text-gray-500">Enter your credentials to access your account</p>
+            <p className="text-gray-500">Enter any credentials to access the dashboard</p>
           </motion.div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
