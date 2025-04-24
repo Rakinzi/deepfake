@@ -1,11 +1,11 @@
 import React from 'react';
 import DashboardLayout from '../components/layouts/DashboardLayouts';
-import LiveStreamingAnalysisContent from '../components/live-streaming-analysis/LiveStreamingAnalysisContent';
+import ImageAnalysisContent from '../components/image-analysis/ImageAnalysisContent';
 
 const LiveStreamingAnalysisPage = () => {
   return (
     <DashboardLayout>
-      <LiveStreamingAnalysisContent />
+      <ImageAnalysisContent />
     </DashboardLayout>
   );
 };

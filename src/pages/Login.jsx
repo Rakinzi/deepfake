@@ -1,27 +1,36 @@
 import React, { useState } from 'react';
-import {motion} from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import AuthService from '../services/AuthService';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!email || !password) {
-      alert('Please fill in all fields');
+      setError('Please fill in all fields');
       return;
     }
     
     setIsLoading(true);
+    setError('');
     
-    // Simply redirect to dashboard after a short delay
-    setTimeout(() => {
-      window.location.href = '/dashboard';
-    }, 800);
+    try {
+      await AuthService.login(email, password);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.error || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -73,7 +82,7 @@ const LoginPage = () => {
             transition={{ delay: 0.7, duration: 0.8 }}
             className="text-gray-600 text-lg max-w-md"
           >
-            Sign in to continue your journey with us and explore all the features we have to offer.
+            Sign in to continue your journey with our AI image analysis platform and detect deepfakes.
           </motion.p>
         </div>
       </motion.div>
@@ -93,8 +102,14 @@ const LoginPage = () => {
             className="mb-10"
           >
             <h2 className="text-3xl font-bold text-black mb-2">Sign In</h2>
-            <p className="text-gray-500">Enter any credentials to access the dashboard</p>
+            <p className="text-gray-500">Enter your credentials to access the dashboard</p>
           </motion.div>
+
+          {error && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-6">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <motion.div
@@ -168,7 +183,7 @@ const LoginPage = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center relative overflow-hidden"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center relative overflow-hidden disabled:opacity-70"
               >
                 {isLoading ? (
                   <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -194,7 +209,7 @@ const LoginPage = () => {
           >
             <p className="text-gray-600">
               Don't have an account?{" "}
-              <a href="register" className="text-blue-600 hover:text-blue-800 font-medium">
+              <a href="/register" className="text-blue-600 hover:text-blue-800 font-medium">
                 Create an account
               </a>
             </p>

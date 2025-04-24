@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import * as framerMotion from 'framer-motion';
-import { Bell, Search, MessageSquare, User, Menu } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  Bell, 
+  Search, 
+  MessageSquare, 
+  User, 
+  Menu,
+  LogOut,
+  Settings,
+  UserCircle
+} from 'lucide-react';
+import AuthService from '../services/AuthService';
 
 const { motion } = framerMotion;
 
@@ -9,8 +20,16 @@ const Navbar = ({ toggleSidebar }) => {
   const [searchActive, setSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [notifications, setNotifications] = useState(3);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [user, setUser] = useState(null);
+  
+  const navigate = useNavigate();
 
   useEffect(() => {
+    // Get current user from local storage
+    const currentUser = AuthService.getCurrentUser();
+    setUser(currentUser);
+
     const handleScroll = () => {
       if (window.scrollY > 20) {
         setScrolled(true);
@@ -24,6 +43,11 @@ const Navbar = ({ toggleSidebar }) => {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
+
+  const handleLogout = () => {
+    AuthService.logout();
+    navigate('/');
+  };
 
   return (
     <motion.nav 
@@ -119,17 +143,51 @@ const Navbar = ({ toggleSidebar }) => {
             )}
           </motion.button>
           
-          <motion.div 
-            className="ml-2 relative"
-            whileHover={{ scale: 1.05 }}
-          >
-            <button className="flex items-center bg-white p-1 rounded-full border-2 border-gray-200 hover:border-blue-300 transition-colors">
+          <div className="ml-2 relative">
+            <motion.button 
+              className="flex items-center bg-white p-1 rounded-full border-2 border-gray-200 hover:border-blue-300 transition-colors"
+              whileHover={{ scale: 1.05 }}
+              onClick={() => setShowUserMenu(!showUserMenu)}
+            >
               <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
                 <User className="w-5 h-5 text-gray-600" />
               </div>
-              <span className="hidden md:block ml-2 mr-1 text-sm font-medium text-gray-700">John Doe</span>
-            </button>
-          </motion.div>
+              <span className="hidden md:block ml-2 mr-1 text-sm font-medium text-gray-700">
+                {user ? user.username : 'User'}
+              </span>
+            </motion.button>
+            
+            {/* User dropdown menu */}
+            {showUserMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-100">
+                <div className="px-4 py-2 border-b border-gray-100">
+                  <p className="text-sm font-medium text-gray-800">{user ? user.username : 'User'}</p>
+                  <p className="text-xs text-gray-500 truncate">{user ? user.email : 'user@example.com'}</p>
+                </div>
+                <a 
+                  href="#profile" 
+                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                >
+                  <UserCircle className="w-4 h-4 mr-2" />
+                  Your Profile
+                </a>
+                <a 
+                  href="#settings" 
+                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
+                </a>
+                <button 
+                  onClick={handleLogout}
+                  className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       

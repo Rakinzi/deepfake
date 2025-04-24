@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import * as framerMotion from 'framer-motion';
 const { motion } = framerMotion;
 import { Eye, EyeOff, Check, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import AuthService from '../services/AuthService';
 
 const RegistrationPage = () => {
   const [formData, setFormData] = useState({
@@ -14,6 +16,8 @@ const RegistrationPage = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
   
   const { name, email, password, confirmPassword } = formData;
 
@@ -30,6 +34,7 @@ const RegistrationPage = () => {
       ...formData,
       [e.target.name]: e.target.value,
     });
+    setError('');
   };
 
   const handleNextStep = () => {
@@ -48,33 +53,30 @@ const RegistrationPage = () => {
     e.preventDefault();
     
     if (!name || !email || !password || !confirmPassword) {
-      alert('Please fill in all fields');
+      setError('Please fill in all fields');
       return;
     }
     
     if (!passwordsMatch) {
-      alert('Passwords do not match');
+      setError('Passwords do not match');
       return;
     }
     
     if (!(minLength && hasUpperCase && hasLowerCase && hasNumber && hasSpecialChar)) {
-      alert('Password does not meet requirements');
+      setError('Password does not meet all requirements');
       return;
     }
     
     setIsLoading(true);
+    setError('');
     
     try {
-      // Mock API call - replace with your actual API endpoint using axios
-      setTimeout(() => {
-        setIsLoading(false);
-        alert('Registration successful!');
-        // Redirect logic would go here
-      }, 1500);
-      
-    } catch (error) {
+      await AuthService.register(name, email, password);
+      // Navigate to login page after successful registration
+      navigate('/', { state: { message: 'Registration successful! Please log in.' } });
+    } catch (err) {
+      setError(err.error || 'Registration failed. Please try again later.');
       setIsLoading(false);
-      alert('Registration failed');
     }
   };
 
@@ -110,6 +112,12 @@ const RegistrationPage = () => {
             <h2 className="text-3xl font-bold text-black mb-2">Create an Account</h2>
             <p className="text-gray-500">Join us today and unlock exclusive features</p>
           </motion.div>
+
+          {error && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-6">
+              {error}
+            </div>
+          )}
 
           <div className="mb-8">
             <div className="flex justify-between items-center">
@@ -370,9 +378,9 @@ const RegistrationPage = () => {
               transition={{ delay: 0.5, duration: 0.8 }}
               className="mb-8"
             >
-              <h2 className="text-3xl font-bold text-white mb-4">Join our community</h2>
+              <h2 className="text-3xl font-bold text-white mb-4">Join our AI-powered deepfake detection platform</h2>
               <p className="text-blue-100 text-lg">
-                Create an account to access exclusive features, personalized recommendations, and a seamless experience.
+                Create an account to access state-of-the-art image analysis tools and protect yourself from AI-generated content.
               </p>
             </motion.div>
             
@@ -382,7 +390,7 @@ const RegistrationPage = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.7, duration: 0.8 }}
             >
-              {['Personalized dashboard', 'Advanced analytics', 'Secure data storage', 'Priority support'].map((feature, i) => (
+              {['AI detection technology', 'Image manipulation alerts', 'Secure data storage', 'Advanced analytics'].map((feature, i) => (
                 <div key={i} className="bg-blue-700 bg-opacity-30 p-4 rounded-lg flex items-center space-x-2">
                   <Check className="h-5 w-5 text-blue-200 flex-shrink-0" />
                   <span className="text-blue-100 text-sm">{feature}</span>

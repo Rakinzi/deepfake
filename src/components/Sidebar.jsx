@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import * as framerMotion from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { 
   Home, 
   BarChart2, 
@@ -15,36 +16,36 @@ import {
   Tv,
   ChevronRight,
   LogOut,
-  X
+  X,
+  User
 } from 'lucide-react';
+import AuthService from '../services/AuthService';
 
 const { motion } = framerMotion;
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const [expandedMenu, setExpandedMenu] = useState(null);
+  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
   
+  useEffect(() => {
+    // Get current user from local storage
+    const currentUser = AuthService.getCurrentUser();
+    setUser(currentUser);
+  }, []);
+
   // Navigation items - all in one place
   const navItems = [
     { path: '/dashboard', icon: Home, label: 'Dashboard' },
-    // { 
-    //   path: '/analytics', 
-    //   icon: BarChart2, 
-    //   label: 'Analytics',
-    //   children: [
-    //     { path: '/analytics/overview', label: 'Overview' },
-    //     { path: '/analytics/reports', label: 'Reports' },
-    //     { path: '/analytics/metrics', label: 'Metrics' }
-    //   ]
-    // },
     { path: '/image-analysis', icon: Image, label: 'Image Analysis' },
     { path: '/video-analysis', icon: Video, label: 'Video Analysis' },
     { path: '/audio-analysis', icon: AudioWaveform, label: 'Audio Analysis' },
     { path: '/text-analysis', icon: Text, label: 'Text Analysis' },
     { path: '/live-streaming-analysis', icon: Tv, label: 'Live Streaming Analysis'},
-
   ];
   
   const bottomItems = [
+    { path: '/profile', icon: User, label: 'Profile' },
     { path: '/settings', icon: Settings, label: 'Settings' },
     { path: '/help', icon: HelpCircle, label: 'Help & Support' },
   ];
@@ -57,6 +58,11 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const isActive = (path) => {
     return window.location.pathname === path || 
           (path !== '/dashboard' && window.location.pathname.startsWith(path));
+  };
+
+  const handleLogout = () => {
+    AuthService.logout();
+    navigate('/');
   };
   
   // Animation variants
@@ -88,6 +94,21 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         initial={false}
         animate={isOpen ? 'open' : 'closed'}
       >
+        {/* User profile section */}
+        {isOpen && (
+          <div className="px-4 py-4 border-b border-gray-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                <User className="w-5 h-5" />
+              </div>
+              <div className="overflow-hidden">
+                <p className="font-medium text-gray-800 truncate">{user ? user.username : 'User'}</p>
+                <p className="text-xs text-gray-500 truncate">{user ? user.email : 'user@example.com'}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Main navigation */}
         <div className="flex-1 overflow-y-auto">
           <div className="px-4 py-4">
@@ -180,7 +201,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         <div className="border-t border-gray-200 pt-4 pb-6 px-4">
           {isOpen && (
             <p className="text-xs font-medium uppercase text-gray-500 mb-4">
-              Settings & Support
+              Settings & Account
             </p>
           )}
           
@@ -209,18 +230,19 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             })}
           </ul>
 
-          {isOpen && (
-            <div className="mt-6">
-              <button
-                className="flex items-center w-full p-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
-              >
-                <LogOut className="w-6 h-6 text-red-500" />
+          <div className="mt-6">
+            <button
+              onClick={handleLogout}
+              className={`flex items-center w-full p-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors ${!isOpen ? 'justify-center' : ''}`}
+            >
+              <LogOut className="w-6 h-6 text-red-500" />
+              {isOpen && (
                 <span className="ml-3 font-medium text-sm">
                   Logout
                 </span>
-              </button>
-            </div>
-          )}
+              )}
+            </button>
+          </div>
         </div>
       </motion.aside>
     </>

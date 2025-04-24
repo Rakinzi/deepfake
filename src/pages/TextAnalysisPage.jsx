@@ -1,11 +1,11 @@
 import React from 'react';
 import DashboardLayout from '../components/layouts/DashboardLayouts';
-import TextAnalysisContent from '../components/text-analysis/TextAnalysisContent';
+import ImageAnalysisContent from '../components/image-analysis/ImageAnalysisContent';
 
 const TextAnalysisPage = () => {
   return (
     <DashboardLayout>
-      <TextAnalysisContent />
+      <ImageAnalysisContent />
     </DashboardLayout>
   );
 };

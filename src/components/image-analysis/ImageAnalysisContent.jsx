@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Upload, 
   Image, 
@@ -12,8 +12,13 @@ import {
   Info,
   UserCheck,
   UserX,
-  Activity
+  Activity,
+  History
 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import ApiService from '../../services/ApiService';
+import AuthService from '../../services/AuthService';
+import { useNavigate } from 'react-router-dom';
 
 const ImageAnalysisContent = () => {
   const [image, setImage] = useState(null);
@@ -22,8 +27,40 @@ const ImageAnalysisContent = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState(null);
   const [error, setError] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
+
+  // Check authentication
+  useEffect(() => {
+    if (!AuthService.isLoggedIn()) {
+      navigate('/');
+    }
+  }, [navigate]);
+
+  // Load user history
+  const loadHistory = async () => {
+    try {
+      setIsLoadingHistory(true);
+      const response = await AuthService.getUserHistory();
+      if (response.success) {
+        setHistory(response.history);
+      }
+    } catch (err) {
+      console.error('Error loading history:', err);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showHistory) {
+      loadHistory();
+    }
+  }, [showHistory]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -89,27 +126,27 @@ const ImageAnalysisContent = () => {
     setError(null);
     
     try {
-      // Create form data to send to the backend
-      const formData = new FormData();
-      formData.append('image', image);
-      
       // Send image to backend for analysis
-      const response = await fetch('http://localhost:5000/api/analyze-face', {
-        method: 'POST',
-        body: formData
-      });
+      const response = await ApiService.analyzeFace(image);
       
-      const data = await response.json();
-      
-      if (data.success) {
-        setAnalysisResults(data.results);
-        console.log('Results:', data.results);
+      if (response.success) {
+        setAnalysisResults(response.results);
+        // Refresh history after successful analysis
+        if (showHistory) {
+          loadHistory();
+        }
       } else {
-        setError(data.error || 'Analysis failed. Please try another image.');
+        setError(response.error || 'Analysis failed. Please try another image.');
       }
     } catch (err) {
       console.error('Error analyzing image:', err);
-      setError('Server error. Please try again later.');
+      setError(err.error || 'Server error. Please try again later.');
+      
+      // If unauthorized, redirect to login
+      if (err.status === 401) {
+        AuthService.logout();
+        navigate('/');
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -121,13 +158,81 @@ const ImageAnalysisContent = () => {
     return Object.entries(emotions).reduce((a, b) => a[1] > b[1] ? a : b)[0];
   };
 
+  // Format date for display
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleString();
+  };
+
   return (
     <div className="space-y-6">
       {/* Page header */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <h1 className="text-2xl font-bold text-gray-800">Face Analysis & Fake Detection</h1>
-        <p className="text-gray-500 mt-1">Upload a face image to analyze and check if it's real or AI-generated.</p>
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+          <div className="mb-4 sm:mb-0">
+            <h1 className="text-2xl font-bold text-gray-800">Face Analysis & Fake Detection</h1>
+            <p className="text-gray-500 mt-1">Upload a face image to analyze and check if it's real or AI-generated.</p>
+          </div>
+          <div className="flex space-x-3">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={`px-4 py-2 rounded-lg flex items-center transition-colors ${
+                showHistory ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <History className="w-5 h-5 mr-2" />
+              {showHistory ? 'Hide History' : 'Show History'}
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* History Section */}
+      {showHistory && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.3 }}
+          className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+        >
+          <div className="p-6">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">Analysis History</h2>
+            
+            {isLoadingHistory ? (
+              <div className="flex justify-center items-center h-20">
+                <Loader className="w-8 h-8 text-blue-500 animate-spin" />
+              </div>
+            ) : history.length === 0 ? (
+              <div className="text-center p-8 text-gray-500">
+                <FileText className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                <p>No analysis history found. Analyze some images to see them here.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {history.map((item) => (
+                  <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="h-32 bg-gray-100 flex items-center justify-center">
+                      <Image className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <div className="p-3">
+                      <p className="text-sm font-medium text-gray-800">{item.original_filename}</p>
+                      <div className="flex items-center mt-1">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          item.is_real ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {item.is_real ? 'Authentic' : 'Fake/AI-Generated'}
+                        </span>
+                        <span className="text-xs text-gray-500 ml-auto">{formatDate(item.created_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Upload section */}
