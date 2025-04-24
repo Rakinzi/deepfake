@@ -3,8 +3,10 @@ from flask_cors import CORS
 import os
 import uuid
 import cv2
-from deepface import DeepFace
 import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.image import img_to_array
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -15,10 +17,15 @@ if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+# Load the model
+MODEL_PATH = 'model/best_fine_tuned_EfficientNetV2S_model.h5'
+model = load_model(MODEL_PATH)
+print(f"Model loaded from {MODEL_PATH}")
+
 @app.route('/api/analyze-face', methods=['POST'])
 def analyze_face():
     """
-    Endpoint to analyze a face image using DeepFace with anti_spoofing
+    Endpoint to analyze a face image using our custom model
     """
     if 'image' not in request.files:
         return jsonify({
@@ -31,7 +38,7 @@ def analyze_face():
     # If no file selected
     if file.filename == '':
         return jsonify({
-            'success': False, 
+            'success': False,
             'error': 'No image selected'
         }), 400
     
@@ -49,57 +56,99 @@ def analyze_face():
                 'error': 'Failed to process image'
             }), 400
         
-        # Run DeepFace with anti_spoofing enabled
-        face_objs = DeepFace.extract_faces(img_path=file_path, anti_spoofing=True)
+        # Face detection (you may want to use a face detector like OpenCV's Haar cascade)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
         
-        # Get face analysis
-        face_analysis = DeepFace.analyze(
-            img_path=file_path,
-            actions=['age', 'gender', 'emotion', 'race'],
-            enforce_detection=False
-        )
+        faces_data = []
         
-        print(face_analysis)
-        # Extract the first face result if multiple faces are detected
-        if isinstance(face_analysis, list) and len(face_analysis) > 0:
-            face_data = face_analysis[0]
+        if len(faces) > 0:
+            for (x, y, w, h) in faces:
+                # Extract face ROI
+                face_roi = img[y:y+h, x:x+w]
+                
+                # Preprocess for our model
+                face_roi = cv2.resize(face_roi, (224, 224))
+                face_roi = face_roi / 255.0  # Normalize
+                face_roi = img_to_array(face_roi)
+                face_roi = np.expand_dims(face_roi, axis=0)
+                
+                # Make prediction
+                prediction = model.predict(face_roi)[0][0]
+                is_real = bool(prediction >= 0.5)
+                
+                # Calculate basic image quality metrics
+                face_gray = cv2.cvtColor(img[y:y+h, x:x+w], cv2.COLOR_BGR2GRAY)
+                sharpness = float(cv2.Laplacian(face_gray, cv2.CV_64F).var())
+                brightness = float(np.mean(face_gray))
+                contrast = float(np.std(face_gray))
+                
+                faces_data.append({
+                    'is_real': is_real,
+                    'real_score': float(prediction),
+                    'spoofing_type': 'unknown' if is_real else 'fake',
+                    'facial_area': {
+                        'x': int(x),
+                        'y': int(y),
+                        'w': int(w),
+                        'h': int(h)
+                    },
+                    'confidence': float(prediction if is_real else 1-prediction),
+                    'quality': {
+                        'sharpness': sharpness,
+                        'brightness': brightness,
+                        'contrast': contrast
+                    }
+                })
         else:
-            face_data = face_analysis
-        
-        # Calculate basic image quality metrics
-        quality = {}
-        try:
+            # If no face is detected, analyze the whole image
+            preprocessed_img = cv2.resize(img, (224, 224))
+            preprocessed_img = preprocessed_img / 255.0
+            preprocessed_img = img_to_array(preprocessed_img)
+            preprocessed_img = np.expand_dims(preprocessed_img, axis=0)
+            
+            prediction = model.predict(preprocessed_img)[0][0]
+            is_real = bool(prediction >= 0.5)
+            
+            # Calculate image quality metrics for the whole image
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            quality = {
-                "sharpness": float(cv2.Laplacian(gray, cv2.CV_64F).var()),
-                "brightness": float(np.mean(gray)),
-                "contrast": float(np.std(gray))
-            }
-        except:
-            quality = {
-                "sharpness": 0.0,
-                "brightness": 0.0,
-                "contrast": 0.0
-            }
+            sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+            brightness = float(np.mean(gray))
+            contrast = float(np.std(gray))
+            
+            faces_data.append({
+                'is_real': is_real,
+                'real_score': float(prediction),
+                'spoofing_type': 'unknown' if is_real else 'fake',
+                'facial_area': {
+                    'x': 0,
+                    'y': 0,
+                    'w': img.shape[1],
+                    'h': img.shape[0]
+                },
+                'confidence': float(prediction if is_real else 1-prediction),
+                'quality': {
+                    'sharpness': sharpness,
+                    'brightness': brightness,
+                    'contrast': contrast
+                }
+            })
         
         # Compile results
         results = {
-            'faces': [
-                {
-                    'is_real': face_obj.get('is_real', False),
-                    'real_score': face_obj.get('real_score', 0.0),
-                    'spoofing_type': face_obj.get('spoofing_type', 'unknown'),
-                    'facial_area': face_obj.get('facial_area', {}),
-                    'confidence': face_obj.get('confidence', 0.0)
-                } for face_obj in face_objs
-            ],
+            'faces': faces_data,
             'analysis': {
-                'age': face_data.get('age'),
-                'gender': face_data.get('dominant_gender'),
-                'emotion': face_data.get('emotion'),
-                'race': face_data.get('dominant_race')
+                'age': None,  # Your model doesn't predict age
+                'gender': None,  # Your model doesn't predict gender
+                'emotion': None,  # Your model doesn't predict emotion
+                'race': None  # Your model doesn't predict race
             },
-            'quality': quality
+            'quality': {
+                'sharpness': float(cv2.Laplacian(gray, cv2.CV_64F).var()),
+                'brightness': float(np.mean(gray)),
+                'contrast': float(np.std(gray))
+            }
         }
         
         return jsonify({
@@ -108,6 +157,8 @@ def analyze_face():
         })
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': f'Error analyzing image: {str(e)}'
@@ -118,7 +169,7 @@ def api_status():
     """Check if the API is running"""
     return jsonify({
         'status': 'online',
-        'message': 'Face analysis API is running'
+        'message': 'Face analysis API is running with custom fake detection model'
     })
 
 if __name__ == '__main__':
