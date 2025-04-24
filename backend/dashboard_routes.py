@@ -29,6 +29,25 @@ def get_dashboard_stats():
         cursor.execute("SELECT COUNT(*) as total_images FROM images WHERE user_id = %s", (current_user_id,))
         total_images = cursor.fetchone()['total_images']
         
+        # If no images, return empty stats
+        if total_images == 0:
+            return jsonify({
+                'success': True,
+                'stats': {
+                    'scanned': {
+                        'title': 'Images Scanned',
+                        'value': '0',
+                        'change': '0%',
+                        'isPositive': True
+                    }
+                },
+                'recent_detections': [],
+                'chart_data': {
+                    'authentic': {'percent': 0, 'count': 0},
+                    'ai_generated': {'percent': 0, 'count': 0}
+                }
+            }), 200
+        
         # Fake images detected
         cursor.execute('''
             SELECT COUNT(*) as fake_images 
@@ -54,9 +73,6 @@ def get_dashboard_stats():
             # This is a placeholder accuracy calculation
             # In a real system, you'd need ground truth data to calculate actual accuracy
             accuracy = 98.2  # Placeholder value
-        
-        # Average processing time (placeholder)
-        avg_processing_time = "1.8s"  # Placeholder value
         
         # Stats for last month vs previous month
         current_date = datetime.now()
@@ -175,14 +191,18 @@ def get_dashboard_stats():
                 'value': f"{accuracy:.1f}%",
                 'change': "+1.2%",  # Placeholder
                 'isPositive': True
-            },
-            'processing': {
+            }
+        }
+        
+        # Only add processing time stat if we have data
+        # In a real application, you would calculate this from your database
+        if total_images > 0:
+            stats['processing'] = {
                 'title': 'Avg. Processing Time',
-                'value': avg_processing_time,
+                'value': '1.8s',  # In a real app, calculate this from actual processing times
                 'change': "-0.3s",  # Placeholder
                 'isPositive': True
             }
-        }
         
         # Chart data
         chart_data = {

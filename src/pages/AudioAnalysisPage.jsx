@@ -1,11 +1,11 @@
 import React from 'react';
 import DashboardLayout from '../components/layouts/DashboardLayouts';
-import ImageAnalysisContent from '../components/image-analysis/ImageAnalysisContent';
+import AudioAnalysisContent from '../components/audio-analysis/AudioAnalysisContent';
 
 const AudioAnalysisPage = () => {
   return (
     <DashboardLayout>
-      <ImageAnalysisContent />
+      <AudioAnalysisContent />
     </DashboardLayout>
   );
 };
