@@ -127,10 +127,13 @@ const ImageAnalysisContent = () => {
     
     try {
       // Send image to backend for analysis
+      console.log("Sending image for analysis...");
       const response = await ApiService.analyzeFace(image);
       
+      console.log("Analysis response:", response);
+      
       if (response.success) {
-        setAnalysisResults(response.results);
+        setAnalysisResults(response);
         // Refresh history after successful analysis
         if (showHistory) {
           loadHistory();
@@ -360,7 +363,7 @@ const ImageAnalysisContent = () => {
                             <div className="text-sm font-semibold">
                               {face.is_real ? 
                                 `${(face.real_score * 100).toFixed(1)}% real` : 
-                                `Spoof type: ${face.spoofing_type}`}
+                                `${((1 - face.real_score) * 100).toFixed(1)}% synthetic`}
                             </div>
                           </div>
                         </div>
@@ -368,7 +371,7 @@ const ImageAnalysisContent = () => {
                         <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
                           <div
                             className={face.is_real ? 'bg-green-500' : 'bg-red-500'}
-                            style={{ width: `${face.is_real ? face.real_score * 100 : 100 - (face.real_score * 100)}%`, height: '100%' }}
+                            style={{ width: `${face.is_real ? face.real_score * 100 : (1 - face.real_score) * 100}%`, height: '100%' }}
                           ></div>
                         </div>
                         
@@ -396,12 +399,6 @@ const ImageAnalysisContent = () => {
                         </div>
                       )}
                       
-                      {analysisResults.analysis.gender && (
-                        <div className="bg-gray-50 p-3 rounded-lg text-center">
-                          <div className="text-sm text-gray-500">Gender</div>
-                          <div className="text-xl font-semibold text-gray-800">{analysisResults.analysis.gender}</div>
-                        </div>
-                      )}
                       
                       {analysisResults.analysis.race && (
                         <div className="bg-gray-50 p-3 rounded-lg text-center">
@@ -424,7 +421,7 @@ const ImageAnalysisContent = () => {
                         <div className="text-sm text-gray-500 mb-2">Emotion Analysis</div>
                         <div className="space-y-2">
                           {Object.entries(analysisResults.analysis.emotion)
-                            .sort((a, b) => b[1] - a[1])
+                            .sort(([,a], [,b]) => b - a)
                             .slice(0, 3)
                             .map(([emotion, score]) => (
                               <div key={emotion} className="flex items-center justify-between">
@@ -467,6 +464,13 @@ const ImageAnalysisContent = () => {
                         <div className="text-gray-600 mt-1">{parseFloat(analysisResults.quality.contrast).toFixed(1)}</div>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Model information */}
+                {analysisResults.model_used && (
+                  <div className="mt-4 text-xs text-gray-500 italic">
+                    Analysis performed using: {analysisResults.model_used}
                   </div>
                 )}
               </div>

@@ -5,22 +5,13 @@ import os
 import uuid
 import cv2
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.models import load_model
-from tensorflow.keras.applications import EfficientNetB0
-from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout
-from tensorflow.keras.models import Model
 import datetime
 import mysql.connector
 from mysql.connector import pooling
-from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import bcrypt
-import gdown
-import urllib.request
 import requests
 from deepface import DeepFace
-from retinaface import RetinaFace
 
 # Import routes
 from user_routes import user_bp
@@ -48,9 +39,11 @@ if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Create model directory
-MODELS_DIR = 'model'
-os.makedirs(MODELS_DIR, exist_ok=True)
+# Hugging Face API Configuration
+HF_API_URL = "https://api-inference.huggingface.co/models/dima806/deepfake_vs_real_image_detection"
+HF_API_KEY = os.getenv('HF_API_KEY')  # Get API key from environment variables
+if not HF_API_KEY:
+    print("WARNING: HF_API_KEY not found in environment variables. API calls will fail.")
 
 # MySQL Connection Pool
 db_config = {
@@ -80,269 +73,131 @@ def get_db_connection():
         print(f"Error getting database connection: {e}")
         raise
 
-# Function to build a basic EfficientNet model for deepfake detection
-def build_basic_efficientnet_model(input_shape=(224, 224, 3)):
-    """Build an EfficientNet B0 model for deepfake detection"""
-    # Load the pre-trained model without the classification layer
-    base_model = EfficientNetB0(
-        include_top=False,
-        weights='imagenet',
-        input_shape=input_shape
-    )
-    
-    # Add custom classification layers
-    x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-    x = Dense(512, activation='relu')(x)
-    x = Dropout(0.5)(x)
-    predictions = Dense(1, activation='sigmoid')(x)
-    
-    # Create the model
-    model = Model(inputs=base_model.input, outputs=predictions)
-    
-    # Compile the model
-    model.compile(
-        optimizer='adam',
-        loss='binary_crossentropy',
-        metrics=['accuracy']
-    )
-    
-    print("Created a basic EfficientNet model for deepfake detection")
-    return model
-
-# Model paths
-MODEL_PATH = os.path.join(MODELS_DIR, 'efficientnet_deepfake_detector.h5')
-
-# Function to try downloading model from multiple sources
-def download_model():
-    """Try to download a pre-trained deepfake detection model from multiple sources"""
-    # If model already exists, don't download again
-    if os.path.exists(MODEL_PATH):
-        print(f"Model already exists at {MODEL_PATH}")
-        return True
-    
-    # List of potential model sources to try
-    sources = [
-        # Direct download URLs - replace with actual URLs if you have them
-        {
-            "type": "direct",
-            "url": "https://example.com/models/deepfake_detector.h5"
-        },
-        # Google Drive option
-        {
-            "type": "gdrive",
-            "id": "1XJwVZ5HuUjYRZ0R46mXY8ojKdKlqzgEj"
-        }
-    ]
-    
-    # Try each source until one works
-    for source in sources:
-        try:
-            if source["type"] == "direct":
-                print(f"Trying to download model from direct URL: {source['url']}")
-                urllib.request.urlretrieve(source["url"], MODEL_PATH)
-                if os.path.exists(MODEL_PATH):
-                    print(f"Model downloaded successfully to {MODEL_PATH}")
-                    return True
-                
-            elif source["type"] == "gdrive":
-                print(f"Trying to download model from Google Drive ID: {source['id']}")
-                try:
-                    gdown.download(id=source["id"], output=MODEL_PATH, quiet=False)
-                    if os.path.exists(MODEL_PATH):
-                        print(f"Model downloaded successfully to {MODEL_PATH}")
-                        return True
-                except Exception as e:
-                    print(f"Google Drive download failed: {e}")
-                    
-        except Exception as e:
-            print(f"Download attempt failed: {e}")
-            continue
-    
-    print("All download attempts failed. Creating a basic model instead.")
-    return False
-
-# Load or create the model
-model = None
-if download_model():
+# Function to analyze image using Hugging Face Inference API
+def analyze_image_with_huggingface(img_data):
+    """
+    Send the raw image directly to the Hugging Face API without any preprocessing
+    Returns the analysis results
+    """
     try:
-        model = tf.keras.models.load_model(MODEL_PATH)
-        print(f"Model loaded successfully from {MODEL_PATH}")
-    except Exception as e:
-        print(f"Error loading downloaded model: {e}")
-        print("Creating a basic model instead")
-        model = build_basic_efficientnet_model()
-        # Save the model for future use
-        model.save(MODEL_PATH)
-        print(f"Basic model saved to {MODEL_PATH}")
-else:
-    # If download fails, create a basic model
-    print("Creating a basic model since download failed")
-    model = build_basic_efficientnet_model()
-    
-    # Save the model for future use
-    model.save(MODEL_PATH)
-    print(f"Basic model saved to {MODEL_PATH}")
-
-# Function to extract faces using RetinaFace (more accurate than MTCNN)
-def extract_faces(img, threshold=0.9):
-    """Extract faces from image using RetinaFace"""
-    # Convert BGR to RGB if needed
-    if len(img.shape) == 3 and img.shape[2] == 3:
-        rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    else:
-        rgb_img = img
-    
-    # Detect faces
-    faces = RetinaFace.detect_faces(rgb_img)
-    
-    face_images = []
-    face_boxes = []
-    
-    if isinstance(faces, dict):
-        for key in faces:
-            face = faces[key]
-            confidence = face.get('score', 0)
-            
-            if confidence >= threshold:
-                # Get facial area coordinates
-                facial_area = face['facial_area']
-                x1, y1, x2, y2 = facial_area
-                
-                # Extract face
-                face_img = rgb_img[y1:y2, x1:x2]
-                
-                # Resize for model
-                face_img = cv2.resize(face_img, (224, 224))
-                
-                # Add to results
-                face_images.append(face_img)
-                face_boxes.append((x1, y1, x2, y2))
-    
-    return face_images, face_boxes
-
-# Function to analyze a face for deepfake detection
-def analyze_face(face_img):
-    """
-    Analyze a face for deepfake detection
-    Returns prob_real between 0 and 1 (1 = real, 0 = fake)
-    """
-    if model is not None:
-        # If we have our custom model, use it
-        # Preprocess the image
-        img = cv2.resize(face_img, (224, 224))
-        img = img.astype('float32') / 255.0
-        img = np.expand_dims(img, axis=0)
+        # Make API call with the raw image data
+        response = requests.post(
+            HF_API_URL,
+            headers={
+                "Content-Type": "image/jpeg", 
+                "Authorization": f"Bearer {HF_API_KEY}"
+            },
+            data=img_data,
+            timeout=30
+        )
         
-        # Make prediction
-        prediction = model.predict(img)[0][0]
-        return float(prediction)
-    else:
-        # Otherwise use DeepFace as fallback
-        try:
-            # Use DeepFace's facial analysis to look for inconsistencies
-            # Typically deepfakes have unusual facial feature patterns
-            analysis = DeepFace.analyze(face_img, enforce_detection=False, 
-                                        actions=['emotion', 'age', 'gender', 'race'], 
-                                        silent=True)
+        # Check for successful response
+        if response.status_code != 200:
+            print(f"API error: Status code {response.status_code}")
+            print(f"Response content: {response.text}")
+            return {
+                'success': False,
+                'error': f'API error: {response.text}'
+            }
             
-            # Check for facial feature coherence (simplified implementation)
-            # In real implementation, this would be much more complex
-            emotions = analysis[0]['emotion']
-            dominant_emotion = max(emotions, key=emotions.get)
-            emotion_score = emotions[dominant_emotion]
-            
-            # Calculate a probability score (this is a simplified heuristic)
-            # In real deepfake detection, you'd use ML for this
-            coherence_score = emotion_score / 100
-            
-            # Add some randomness to simulate deepfake artifacts detection
-            # A real system would use proper ML for this
-            noise_factor = np.random.normal(0, 0.1)
-            prob_real = min(max(coherence_score + noise_factor, 0), 1)
-            
-            return prob_real
-        except Exception as e:
-            print(f"Error in DeepFace analysis: {e}")
-            # Return a mid-range value if analysis fails
-            return 0.5
-
-# Function to process an image for deepfake detection
-def process_image_for_deepfake(img_data):
-    """
-    Process an image to detect deepfakes
-    Returns analysis results
-    """
-    try:
-        # Convert image data to numpy array
+        # Get the API response
+        api_result = response.json()
+        print(f"Raw API response: {api_result}")
+        
+        # Parse the result to determine if real or fake
+        is_real = False
+        real_score = 0.0
+        
+        # Handle different response formats
+        # Format 1: List of classifications with label and score
+        if isinstance(api_result, list) and len(api_result) > 0 and "label" in api_result[0]:
+            for item in api_result:
+                if "real" in item["label"].lower():
+                    real_score = item["score"]
+                    is_real = real_score >= 0.5
+                elif "fake" in item["label"].lower() and real_score == 0.0:
+                    # Only use fake score if we haven't found a real score
+                    real_score = 1.0 - item["score"]
+                    is_real = real_score >= 0.5
+        
+        # Format 2: Direct score values
+        elif isinstance(api_result, dict):
+            if "real" in api_result:
+                real_score = api_result["real"]
+                is_real = real_score >= 0.5
+            elif "fake" in api_result:
+                real_score = 1.0 - api_result["fake"]
+                is_real = real_score >= 0.5
+        
+        # Load image to get dimensions for display
         nparr = np.frombuffer(img_data, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
-        # Extract faces
-        face_images, face_boxes = extract_faces(img)
+        # Get image qualities
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        sharpness = float(cv2.Laplacian(img_gray, cv2.CV_64F).var())
+        brightness = float(np.mean(img_gray))
+        contrast = float(np.std(img_gray))
         
-        # If no faces detected
-        if len(face_images) == 0:
-            return {
-                'success': False,
-                'error': 'No faces detected in the image'
-            }
-        
-        # Analyze each face
-        results = []
-        for i, face_img in enumerate(face_images):
-            # Get prediction
-            real_score = analyze_face(face_img)
-            is_real = bool(real_score >= 0.5)
+        # Try to get facial attributes
+        facial_analysis = None
+        try:
+            analysis = DeepFace.analyze(img, enforce_detection=False, 
+                                      actions=['emotion', 'age', 'race'], 
+                                      silent=True)
             
-            # Calculate image quality metrics
-            face_gray = cv2.cvtColor(face_img, cv2.COLOR_RGB2GRAY)
-            sharpness = float(cv2.Laplacian(face_gray, cv2.CV_64F).var())
-            brightness = float(np.mean(face_gray))
-            contrast = float(np.std(face_gray))
-            
-            # Add to results
-            results.append({
-                'is_real': is_real,
-                'real_score': real_score,
-                'spoofing_type': 'unknown' if is_real else 'AI-generated',
-                'facial_area': {
-                    'x': int(face_boxes[i][0]),
-                    'y': int(face_boxes[i][1]),
-                    'w': int(face_boxes[i][2] - face_boxes[i][0]),
-                    'h': int(face_boxes[i][3] - face_boxes[i][1])
-                },
-                'confidence': float(real_score if is_real else 1-real_score),
-                'quality': {
-                    'sharpness': sharpness,
-                    'brightness': brightness,
-                    'contrast': contrast
+            if isinstance(analysis, list) and len(analysis) > 0:
+                facial_analysis = {
+                    'age': analysis[0].get('age'),
+                    'emotion': analysis[0].get('emotion'),
+                    'race': analysis[0].get('dominant_race')
                 }
-            })
+                print(f"Facial analysis: {facial_analysis}")
+        except Exception as e:
+            print(f"Error in facial analysis: {e}")
+            facial_analysis = None
         
-        # Return complete analysis
-        return {
+        # Return complete analysis result
+        result = {
             'success': True,
-            'faces': results,
-            'analysis': {
-                'age': None,
-                'gender': None,
-                'emotion': None,
-                'race': None
-            },
+            'faces': [
+                {
+                    'is_real': is_real,
+                    'real_score': float(real_score),
+                    'spoofing_type': 'unknown' if is_real else 'AI-generated',
+                    'facial_area': {
+                        'x': 0,
+                        'y': 0,
+                        'w': img.shape[1],
+                        'h': img.shape[0]
+                    },
+                    'confidence': float(real_score if is_real else 1-real_score),
+                    'quality': {
+                        'sharpness': sharpness,
+                        'brightness': brightness,
+                        'contrast': contrast
+                    }
+                }
+            ],
+            'analysis': facial_analysis,
             'quality': {
-                'sharpness': float(cv2.Laplacian(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()),
-                'brightness': float(np.mean(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))),
-                'contrast': float(np.std(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)))
-            }
+                'sharpness': sharpness,
+                'brightness': brightness,
+                'contrast': contrast
+            },
+            'model_used': 'dima806/deepfake_vs_real_image_detection (HF Inference API)',
+            'raw_api_response': api_result
         }
         
+        return result
+        
     except Exception as e:
+        print(f"Error in analyzing image with Hugging Face API: {e}")
         import traceback
         traceback.print_exc()
         return {
             'success': False,
-            'error': f'Error analyzing image: {str(e)}'
+            'error': f'Analysis error: {str(e)}'
         }
 
 # Initialize database tables
@@ -523,13 +378,18 @@ def analyze_face_api():
         }), 400
     
     try:
+        print(f"Processing image: {file.filename}")
+        
         # Save the file with a unique filename
         unique_filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         file.save(file_path)
         
+        print(f"Saved file to {file_path}")
+        
         # Get the file size
         file_size = os.path.getsize(file_path)
+        print(f"File size: {file_size} bytes")
         
         # Database connection
         conn = get_db_connection()
@@ -542,20 +402,23 @@ def analyze_face_api():
         )
         conn.commit()
         image_id = cursor.lastrowid
+        print(f"Saved to database with image_id: {image_id}")
         
         # Read the file for analysis
         with open(file_path, 'rb') as f:
             img_data = f.read()
         
-        # Process the image
-        analysis_result = process_image_for_deepfake(img_data)
+        # Process the image (send directly to HF API)
+        print("Starting image analysis...")
+        analysis_result = analyze_image_with_huggingface(img_data)
         
         # If analysis failed, return error
         if not analysis_result['success']:
+            print(f"Analysis failed: {analysis_result.get('error', 'Unknown error')}")
             return jsonify(analysis_result), 400
         
         # Store analysis results in database
-        if 'faces' in analysis_result:
+        if 'faces' in analysis_result and analysis_result['faces']:
             for face in analysis_result['faces']:
                 cursor.execute(
                     "INSERT INTO analysis_results (image_id, is_real, real_score, spoofing_type, sharpness, brightness, contrast) VALUES (%s, %s, %s, %s, %s, %s, %s)",
@@ -570,13 +433,22 @@ def analyze_face_api():
                     )
                 )
                 conn.commit()
+                print(f"Saved face analysis to database")
+        else:
+            print("No faces data to save to database")
         
         # Add image_id to the results
         analysis_result['image_id'] = image_id
         
+        # Remove raw API response from the final output to keep it clean
+        if 'raw_api_response' in analysis_result:
+            del analysis_result['raw_api_response']
+        
+        print("Analysis completed successfully")
         return jsonify(analysis_result)
         
     except Exception as e:
+        print(f"Error in analyze_face_api: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({
@@ -589,14 +461,55 @@ def analyze_face_api():
         if 'conn' in locals() and conn:
             conn.close()
 
+# Test endpoint for direct API comparison
+@app.route('/api/test-huggingface', methods=['POST'])
+def test_huggingface_api():
+    """Test endpoint for the Hugging Face API"""
+    if 'image' not in request.files:
+        return jsonify({
+            'success': False,
+            'error': 'No image file provided'
+        }), 400
+    
+    file = request.files['image']
+    
+    try:
+        # Read the image file
+        img_data = file.read()
+        
+        # Call the Hugging Face API directly
+        response = requests.post(
+            HF_API_URL,
+            headers={
+                "Content-Type": "image/jpeg", 
+                "Authorization": f"Bearer {HF_API_KEY}"
+            },
+            data=img_data
+        )
+        
+        # Return the raw API response for debugging
+        return jsonify({
+            'success': True,
+            'status_code': response.status_code,
+            'raw_response': response.json() if response.status_code == 200 else response.text,
+            'inference_time': response.elapsed.total_seconds()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/status', methods=['GET'])
 def api_status():
     """Check if the API is running"""
     return jsonify({
         'status': 'online',
         'message': 'Face analysis API is running with authentication enabled',
-        'model_status': 'loaded' if model is not None else 'fallback mode'
+        'model': 'dima806/deepfake_vs_real_image_detection (Hugging Face Inference API)',
+        'version': '1.0.0'
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=False, port=5000)
