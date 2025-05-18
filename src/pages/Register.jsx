@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as framerMotion from 'framer-motion';
 const { motion } = framerMotion;
 import { Eye, EyeOff, Check, X } from 'lucide-react';
@@ -28,6 +28,14 @@ const RegistrationPage = () => {
   const hasNumber = /[0-9]/.test(password);
   const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
   const passwordsMatch = password === confirmPassword;
+
+  useEffect(() => {
+    document.title = 'Register';
+    const token = localStorage.getItem('token');
+    if (token) {
+      navigate('/dashboard');
+    }
+  }, [])
 
   const handleChange = (e) => {
     setFormData({

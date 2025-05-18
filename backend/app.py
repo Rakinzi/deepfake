@@ -6,7 +6,6 @@ import uuid
 import cv2
 import numpy as np
 import datetime
-import mysql.connector
 from mysql.connector import pooling
 from dotenv import load_dotenv
 import bcrypt
@@ -16,6 +15,8 @@ from deepface import DeepFace
 # Import routes
 from user_routes import user_bp
 from dashboard_routes import dashboard_bp
+from video_routes import video_bp
+
 
 # Load environment variables
 load_dotenv()
@@ -32,6 +33,7 @@ jwt = JWTManager(app)
 # Register blueprints
 app.register_blueprint(user_bp, url_prefix='/api/user')
 app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+app.register_blueprint(video_bp, url_prefix='/api/video')
 
 # Configuration
 UPLOAD_FOLDER = 'uploads'
@@ -244,6 +246,41 @@ def init_db():
             contrast FLOAT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (image_id) REFERENCES images(id)
+        )
+        ''')
+        
+        # Create videos table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS videos (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT,
+            file_path VARCHAR(255) NOT NULL,
+            original_filename VARCHAR(255) NOT NULL,
+            file_size INT NOT NULL,
+            duration FLOAT,
+            fps FLOAT,
+            resolution VARCHAR(20),
+            frame_count INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+        ''')
+        
+        # Create video_analysis_results table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS video_analysis_results (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            video_id INT NOT NULL,
+            is_real BOOLEAN NOT NULL,
+            real_score FLOAT NOT NULL,
+            deepfake_probability FLOAT NOT NULL,
+            manipulation_type VARCHAR(50),
+            detected_frames INT,
+            total_frames INT,
+            confidence FLOAT,
+            detection_regions JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (video_id) REFERENCES videos(id)
         )
         ''')
         
@@ -510,6 +547,7 @@ def api_status():
         'model': 'dima806/deepfake_vs_real_image_detection (Hugging Face Inference API)',
         'version': '1.0.0'
     })
-
+    
+    
 if __name__ == '__main__':
     app.run(debug=False, port=5000)

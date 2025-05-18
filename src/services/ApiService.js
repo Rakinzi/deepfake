@@ -18,10 +18,10 @@ class ApiService {
     try {
       const formData = new FormData();
       formData.append('image', imageFile);
-      
+
       const response = await axios.post(
-        `${API_URL}/analyze-face`, 
-        formData, 
+        `${API_URL}/analyze-face`,
+        formData,
         {
           ...this.setAuthHeader(),
           headers: {
@@ -30,7 +30,32 @@ class ApiService {
           }
         }
       );
-      
+
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { error: 'Network error' };
+    }
+  }
+
+  async analyzeVideo(videoFormData, progressCallback = null) {
+    try {
+      const response = await axios.post(
+        `${API_URL}/video/analyze-video`,
+        videoFormData,
+        {
+          ...this.setAuthHeader(),
+          headers: {
+            ...this.setAuthHeader().headers,
+            'Content-Type': 'multipart/form-data'
+          },
+          onUploadProgress: progressCallback
+            ? progressEvent => {
+              progressCallback(progressEvent);
+            }
+            : null
+        }
+      );
+
       return response.data;
     } catch (error) {
       throw error.response ? error.response.data : { error: 'Network error' };

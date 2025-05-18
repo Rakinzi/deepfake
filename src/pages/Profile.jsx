@@ -11,7 +11,9 @@ import {
   Image as ImageIcon,
   Shield,
   AlertCircle,
-  History
+  History,
+  Video,
+  Info
 } from 'lucide-react';
 import AuthService from '../services/AuthService';
 import { motion } from 'framer-motion';
@@ -22,6 +24,7 @@ const Profile = () => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('profile');
   const [history, setHistory] = useState([]);
+  const [videoHistory, setVideoHistory] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
@@ -30,6 +33,10 @@ const Profile = () => {
     newPassword: '',
     confirmPassword: ''
   });
+
+  useEffect(()=> {
+    document.title = 'Profile';
+  }, [])
   
   // Load user data
   useEffect(() => {
@@ -63,6 +70,7 @@ const Profile = () => {
   useEffect(() => {
     if (activeTab === 'history') {
       loadHistory();
+      loadVideoHistory();
     }
   }, [activeTab]);
   
@@ -75,6 +83,28 @@ const Profile = () => {
       }
     } catch (err) {
       console.error('Error loading history:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const loadVideoHistory = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/video/history', {
+        headers: {
+          'Authorization': `Bearer ${AuthService.getToken()}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setVideoHistory(data.history);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading video history:', err);
     } finally {
       setLoading(false);
     }
@@ -105,6 +135,13 @@ const Profile = () => {
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleString();
+  };
+  
+  // Format duration for display
+  const formatDuration = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
   };
   
   if (loading && !user) {
@@ -373,7 +410,7 @@ const Profile = () => {
             {activeTab === 'history' && (
               <div>
                 <div className="mb-6">
-                  <h2 className="text-lg font-semibold text-gray-800">Analysis History</h2>
+                  <h2 className="text-lg font-semibold text-gray-800">Image Analysis History</h2>
                   <p className="text-gray-500 text-sm mt-1">View all your previous image analysis results</p>
                 </div>
                 
@@ -384,7 +421,7 @@ const Profile = () => {
                 ) : history.length === 0 ? (
                   <div className="text-center p-8 bg-gray-50 rounded-lg border border-gray-100">
                     <History className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                    <p className="text-gray-500">No analysis history found. Start analyzing images to see your history.</p>
+                    <p className="text-gray-500">No image analysis history found. Start analyzing images to see your history.</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -429,6 +466,81 @@ const Profile = () => {
                     ))}
                   </div>
                 )}
+
+                {/* Video Analysis History */}
+                <div className="mt-8 border-t border-gray-200 pt-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Video Analysis History</h3>
+                  
+                  <div className="bg-blue-50 p-4 rounded-lg text-blue-700 mb-6 flex items-start">
+                    <Info className="w-5 h-5 mr-2 mt-0.5" />
+                    <div>
+                      <p className="font-medium">Your video analysis history</p>
+                      <p className="text-sm mt-1">Below are the videos you've analyzed for deepfake detection.</p>
+                    </div>
+                  </div>
+                  
+                  {videoHistory && videoHistory.length === 0 ? (
+                    <div className="text-center p-8 bg-gray-50 rounded-lg border border-gray-100">
+                      <Video className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                      <p className="text-gray-500">No video analysis history found. Start analyzing videos to see your history.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {videoHistory && videoHistory.map((item) => (
+                        <motion.div 
+                          key={item.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="border border-gray-200 rounded-lg overflow-hidden"
+                        >
+                          <div className="flex flex-col sm:flex-row">
+                            <div className="sm:w-40 h-28 bg-gray-100 flex items-center justify-center relative">
+                              <Video className="w-10 h-10 text-gray-400" />
+                              {item.duration && (
+                                <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-0.5 rounded">
+                                  {formatDuration(item.duration)}
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-4 flex-1">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="font-medium text-gray-800">{item.original_filename}</p>
+                                  <p className="text-sm text-gray-500 mt-1">Analyzed on {formatDate(item.created_at)}</p>
+                                </div>
+                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                  item.is_real ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                }`}>
+                                  {item.is_real ? 'Authentic' : (item.manipulation_type || 'Manipulated')}
+                                </span>
+                              </div>
+                              
+                              <div className="mt-4 flex flex-wrap gap-4">
+                                <div className="text-sm text-gray-600">
+                                  <span className="font-medium">Confidence:</span> {(item.is_real ? 
+                                    (item.real_score * 100) : 
+                                    (item.deepfake_probability * 100)).toFixed(1)}%
+                                </div>
+                                {item.resolution && (
+                                  <div className="text-sm text-gray-600">
+                                    <span className="font-medium">Resolution:</span> {item.resolution}
+                                  </div>
+                                )}
+                                {item.detected_frames && item.total_frames && (
+                                  <div className="text-sm text-gray-600">
+                                    <span className="font-medium">Affected Frames:</span> {item.detected_frames}/{item.total_frames} 
+                                    ({Math.round(item.detected_frames/item.total_frames*100)}%)
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

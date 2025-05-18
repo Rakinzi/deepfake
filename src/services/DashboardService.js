@@ -13,14 +13,41 @@ class DashboardService {
     };
   }
 
+  async getVideoDashboardStats() {
+    try {
+      const response = await axios.get(
+        `${API_URL}/dashboard/video-stats`,
+        this.setAuthHeader()
+      );
+
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { error: 'Network error' };
+    }
+  }
+
+  // Get recent videos
+  async getRecentVideos() {
+    try {
+      const response = await axios.get(
+        `${API_URL}/dashboard/recent-videos`,
+        this.setAuthHeader()
+      );
+
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { error: 'Network error' };
+    }
+  }
+
   // Get dashboard statistics
   async getDashboardStats() {
     try {
       const response = await axios.get(
-        `${API_URL}/dashboard/stats`, 
+        `${API_URL}/dashboard/stats`,
         this.setAuthHeader()
       );
-      
+
       return response.data;
     } catch (error) {
       throw error.response ? error.response.data : { error: 'Network error' };
@@ -34,7 +61,7 @@ class DashboardService {
         `${API_URL}/dashboard/recent`,
         this.setAuthHeader()
       );
-      
+
       return response.data;
     } catch (error) {
       throw error.response ? error.response.data : { error: 'Network error' };

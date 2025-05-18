@@ -14,7 +14,9 @@ import {
   TrendingUp,
   AlertTriangle,
   Loader,
-  RefreshCw
+  RefreshCw,
+  Video,
+  Info
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DashboardService from '../../services/DashboardService';
@@ -29,6 +31,12 @@ const DashboardContent = () => {
   const [chartData, setChartData] = useState(null);
   const [recentAnalyses, setRecentAnalyses] = useState([]);
   
+  // Video stats state
+  const [videoStats, setVideoStats] = useState([]);
+  const [videoChartData, setVideoChartData] = useState(null);
+  const [recentVideos, setRecentVideos] = useState([]);
+  const [recentVideoDetections, setRecentVideoDetections] = useState([]);
+  
   const navigate = useNavigate();
 
   // Check authentication and fetch data
@@ -41,10 +49,12 @@ const DashboardContent = () => {
 
     // Load dashboard data
     fetchDashboardData();
+    fetchVideoDashboardData();
     
     // Load recent analyses if on recent scans tab
     if (activeTab === 'recent scans') {
       fetchRecentAnalyses();
+      fetchRecentVideos();
     }
   }, [navigate]);
 
@@ -52,6 +62,7 @@ const DashboardContent = () => {
   useEffect(() => {
     if (activeTab === 'recent scans') {
       fetchRecentAnalyses();
+      fetchRecentVideos();
     }
   }, [activeTab]);
 
@@ -91,6 +102,40 @@ const DashboardContent = () => {
     }
   };
 
+  // Fetch video dashboard statistics
+  const fetchVideoDashboardData = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await DashboardService.getVideoDashboardStats();
+      
+      if (response.success) {
+        // Format stats as array for rendering
+        const videoStatsArray = Object.keys(response.stats).map(key => ({
+          id: key,
+          title: response.stats[key].title,
+          value: response.stats[key].value,
+          change: response.stats[key].change,
+          isPositive: response.stats[key].isPositive,
+          icon: getIconForVideoStat(key),
+          color: getColorForVideoStat(key)
+        }));
+        
+        setVideoStats(videoStatsArray);
+        setRecentVideoDetections(response.recent_detections || []);
+        setVideoChartData(response.chart_data);
+      } else {
+        setVideoStats([]);
+      }
+    } catch (err) {
+      console.error('Error fetching video dashboard data:', err);
+      setVideoStats([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Fetch recent analyses
   const fetchRecentAnalyses = async () => {
     try {
@@ -104,6 +149,22 @@ const DashboardContent = () => {
     } catch (err) {
       console.error('Error fetching recent analyses:', err);
       setRecentAnalyses([]);
+    }
+  };
+
+  // Fetch recent videos
+  const fetchRecentVideos = async () => {
+    try {
+      const response = await DashboardService.getRecentVideos();
+      
+      if (response.success) {
+        setRecentVideos(response.videos || []);
+      } else {
+        setRecentVideos([]);
+      }
+    } catch (err) {
+      console.error('Error fetching recent videos:', err);
+      setRecentVideos([]);
     }
   };
 
@@ -127,6 +188,25 @@ const DashboardContent = () => {
       default: return 'bg-blue-500';
     }
   };
+  
+  // Helper functions for icons and colors for video stats
+  const getIconForVideoStat = (statId) => {
+    switch (statId) {
+      case 'videos_analyzed': return Video;
+      case 'fake_videos': return ShieldAlert;
+      case 'avg_duration': return Clock;
+      default: return Video;
+    }
+  };
+
+  const getColorForVideoStat = (statId) => {
+    switch (statId) {
+      case 'videos_analyzed': return 'bg-purple-500';
+      case 'fake_videos': return 'bg-red-500';
+      case 'avg_duration': return 'bg-cyan-500';
+      default: return 'bg-purple-500';
+    }
+  };
 
   // Fake image detection techniques (educational content)
   const detectionMethods = [
@@ -143,6 +223,16 @@ const DashboardContent = () => {
     return {
       authentic: chartData.authentic.percent,
       aiGenerated: chartData.ai_generated.percent
+    };
+  };
+  
+  // Determine the dominant result type for video chart visualization
+  const getVideoDominantResult = () => {
+    if (!videoChartData) return { authentic: 0, manipulated: 0 };
+    
+    return {
+      authentic: videoChartData.authentic.percent,
+      manipulated: videoChartData.manipulated.percent
     };
   };
 
@@ -179,8 +269,10 @@ const DashboardContent = () => {
   // Refresh dashboard data
   const handleRefresh = () => {
     fetchDashboardData();
+    fetchVideoDashboardData();
     if (activeTab === 'recent scans') {
       fetchRecentAnalyses();
+      fetchRecentVideos();
     }
   };
 
@@ -193,8 +285,8 @@ const DashboardContent = () => {
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Image Verification Dashboard</h1>
-            <p className="text-gray-500 mt-1">Monitor and analyze potentially manipulated or AI-generated images.</p>
+            <h1 className="text-2xl font-bold text-gray-800">Media Verification Dashboard</h1>
+            <p className="text-gray-500 mt-1">Monitor and analyze potentially manipulated or AI-generated images and videos.</p>
           </div>
           <div className="flex items-center space-x-3">
             <button
@@ -209,7 +301,7 @@ const DashboardContent = () => {
               href="/image-analysis"
               className="hidden sm:flex px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md items-center hover:bg-blue-700 transition-colors"
             >
-              <span>Analyze New Image</span>
+              <span>Analyze New Media</span>
               <ChevronRight className="ml-1 w-4 h-4" />
             </a>
           </div>
@@ -249,14 +341,23 @@ const DashboardContent = () => {
           <div className="col-span-full bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
             <Image className="w-12 h-12 mx-auto text-gray-300 mb-2" />
             <h3 className="text-lg font-medium text-gray-700 mb-2">No analysis data yet</h3>
-            <p className="text-gray-500 mb-4">Start analyzing images to see your statistics here</p>
-            <a 
-              href="/image-analysis"
-              className="inline-flex px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md items-center hover:bg-blue-700 transition-colors"
-            >
-              <span>Analyze Your First Image</span>
-              <ChevronRight className="ml-1 w-4 h-4" />
-            </a>
+            <p className="text-gray-500 mb-4">Start analyzing images or videos to see your statistics here</p>
+            <div className="flex justify-center space-x-4">
+              <a 
+                href="/image-analysis"
+                className="inline-flex px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md items-center hover:bg-blue-700 transition-colors"
+              >
+                <span>Analyze Image</span>
+                <ChevronRight className="ml-1 w-4 h-4" />
+              </a>
+              <a 
+                href="/video-analysis"
+                className="inline-flex px-4 py-2 bg-purple-600 text-white rounded-lg shadow-md items-center hover:bg-purple-700 transition-colors"
+              >
+                <span>Analyze Video</span>
+                <ChevronRight className="ml-1 w-4 h-4" />
+              </a>
+            </div>
           </div>
         ) : (
           // Actual stats from the API
@@ -345,99 +446,215 @@ const DashboardContent = () => {
                 <Image className="w-16 h-16 mx-auto text-gray-200 mb-4" />
                 <h3 className="text-lg font-medium text-gray-700 mb-2">No data to display yet</h3>
                 <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                  Your dashboard will show statistics and insights once you start analyzing images.
+                  Your dashboard will show statistics and insights once you start analyzing images and videos.
                 </p>
-                <a 
-                  href="/image-analysis"
-                  className="inline-flex px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md items-center hover:bg-blue-700 transition-colors"
-                >
-                  Start Analyzing Images
-                </a>
+                <div className="flex justify-center space-x-4">
+                  <a 
+                    href="/image-analysis"
+                    className="inline-flex px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md items-center hover:bg-blue-700 transition-colors"
+                  >
+                    Analyze Image
+                  </a>
+                  <a 
+                    href="/video-analysis"
+                    className="inline-flex px-4 py-2 bg-purple-600 text-white rounded-lg shadow-md items-center hover:bg-purple-700 transition-colors"
+                  >
+                    Analyze Video
+                  </a>
+                </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Detection chart */}
-                <div className="lg:col-span-2 bg-gray-50 rounded-lg p-6 h-64 flex flex-col items-center justify-center">
-                  <div className="text-center mb-4">
-                    <BarChart className="w-12 h-12 mx-auto text-gray-400" />
-                    <p className="mt-2 text-gray-500 font-medium">Image Detection Results (Last 30 Days)</p>
+              <div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Detection chart */}
+                  <div className="lg:col-span-2 bg-gray-50 rounded-lg p-6 h-64 flex flex-col items-center justify-center">
+                    <div className="text-center mb-4">
+                      <BarChart className="w-12 h-12 mx-auto text-gray-400" />
+                      <p className="mt-2 text-gray-500 font-medium">Image Detection Results (Last 30 Days)</p>
+                    </div>
+                    
+                    {chartData && (chartData.authentic.count > 0 || chartData.ai_generated.count > 0) ? (
+                      <div className="w-full max-w-md flex justify-around px-6">
+                        <div className="flex flex-col items-center">
+                          <div className="w-8 h-40 bg-green-500 rounded-t-sm" style={{ 
+                            height: `${Math.max(4, getDominantResult().authentic / 100 * 60)}px` 
+                          }}></div>
+                          <span className="text-xs mt-1 text-gray-500">Authentic</span>
+                          <span className="text-xs font-bold text-gray-700">{Math.round(getDominantResult().authentic)}%</span>
+                          <span className="text-xs text-gray-500 mt-1">{chartData.authentic.count} images</span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <div className="w-8 h-40 bg-red-500 rounded-t-sm" style={{ 
+                            height: `${Math.max(4, getDominantResult().aiGenerated / 100 * 60)}px` 
+                          }}></div>
+                          <span className="text-xs mt-1 text-gray-500">AI Generated</span>
+                          <span className="text-xs font-bold text-gray-700">{Math.round(getDominantResult().aiGenerated)}%</span>
+                          <span className="text-xs text-gray-500 mt-1">{chartData.ai_generated.count} images</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center text-gray-500">
+                        <p>No analysis data available</p>
+                        <p className="text-sm mt-1">Analyze some images to see statistics</p>
+                      </div>
+                    )}
                   </div>
-                  
-                  {chartData && (chartData.authentic.count > 0 || chartData.ai_generated.count > 0) ? (
-                    <div className="w-full max-w-md flex justify-around px-6">
-                      <div className="flex flex-col items-center">
-                        <div className="w-8 h-40 bg-green-500 rounded-t-sm" style={{ 
-                          height: `${Math.max(4, getDominantResult().authentic / 100 * 60)}px` 
-                        }}></div>
-                        <span className="text-xs mt-1 text-gray-500">Authentic</span>
-                        <span className="text-xs font-bold text-gray-700">{Math.round(getDominantResult().authentic)}%</span>
-                        <span className="text-xs text-gray-500 mt-1">{chartData.authentic.count} images</span>
-                      </div>
-                      <div className="flex flex-col items-center">
-                        <div className="w-8 h-40 bg-red-500 rounded-t-sm" style={{ 
-                          height: `${Math.max(4, getDominantResult().aiGenerated / 100 * 60)}px` 
-                        }}></div>
-                        <span className="text-xs mt-1 text-gray-500">AI Generated</span>
-                        <span className="text-xs font-bold text-gray-700">{Math.round(getDominantResult().aiGenerated)}%</span>
-                        <span className="text-xs text-gray-500 mt-1">{chartData.ai_generated.count} images</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center text-gray-500">
-                      <p>No analysis data available</p>
-                      <p className="text-sm mt-1">Analyze some images to see statistics</p>
-                    </div>
-                  )}
-                </div>
 
-                {/* Recent detections */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4 text-gray-800">Recent Detections</h3>
-                  {recentDetections.length === 0 ? (
-                    <div className="text-center p-6 bg-gray-50 rounded-lg">
-                      <FileWarning className="w-10 h-10 mx-auto text-gray-300 mb-2" />
-                      <p className="text-gray-500">No recent detections found</p>
-                      <p className="text-sm text-gray-400 mt-1">Start analyzing images to see your history</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {recentDetections.map((detection, index) => (
-                        <div
-                          key={index}
-                          className="flex items-start"
-                        >
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            detection.result === 'Authentic' ? 'bg-green-100' : 
-                            (detection.result === 'AI Generated' || detection.result === 'Deepfake') ? 'bg-red-100' : 'bg-yellow-100'
-                          }`}>
-                            {detection.result === 'Authentic' ? (
-                              <Check className={`w-5 h-5 text-green-600`} />
-                            ) : detection.result === 'AI Generated' || detection.result === 'Deepfake' ? (
-                              <AlertTriangle className={`w-5 h-5 text-red-600`} />
-                            ) : (
-                              <FileWarning className={`w-5 h-5 text-yellow-600`} />
-                            )}
-                          </div>
-                          <div className="ml-3">
-                            <p className="text-sm text-gray-800 font-medium">
-                              {detection.filename}
-                            </p>
-                            <div className="flex items-center mt-1">
-                              <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                detection.result === 'Authentic' ? 'bg-green-100 text-green-800' : 
-                                (detection.result === 'AI Generated' || detection.result === 'Deepfake') ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {detection.result}
-                              </span>
-                              <span className="text-xs text-gray-500 ml-2">{detection.confidence}</span>
-                              <span className="text-xs text-gray-400 ml-auto">{detection.time}</span>
+                  {/* Recent detections */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4 text-gray-800">Recent Image Detections</h3>
+                    {recentDetections.length === 0 ? (
+                      <div className="text-center p-6 bg-gray-50 rounded-lg">
+                        <FileWarning className="w-10 h-10 mx-auto text-gray-300 mb-2" />
+                        <p className="text-gray-500">No recent detections found</p>
+                        <p className="text-sm text-gray-400 mt-1">Start analyzing images to see your history</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {recentDetections.map((detection, index) => (
+                          <div
+                            key={index}
+                            className="flex items-start"
+                          >
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                              detection.result === 'Authentic' ? 'bg-green-100' : 
+                              (detection.result === 'AI Generated' || detection.result === 'Deepfake') ? 'bg-red-100' : 'bg-yellow-100'
+                            }`}>
+                              {detection.result === 'Authentic' ? (
+                                <Check className={`w-5 h-5 text-green-600`} />
+                              ) : detection.result === 'AI Generated' || detection.result === 'Deepfake' ? (
+                                <AlertTriangle className={`w-5 h-5 text-red-600`} />
+                              ) : (
+                                <FileWarning className={`w-5 h-5 text-yellow-600`} />
+                              )}
                             </div>
+                            <div className="ml-3">
+                              <p className="text-sm text-gray-800 font-medium">
+                                {detection.filename}
+                              </p>
+                              <div className="flex items-center mt-1">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  detection.result === 'Authentic' ? 'bg-green-100 text-green-800' : 
+                                  (detection.result === 'AI Generated' || detection.result === 'Deepfake') ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {detection.result}
+                                </span>
+                                <span className="text-xs text-gray-500 ml-2">{detection.confidence}</span>
+                                <span className="text-xs text-gray-400 ml-auto">{detection.time}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Video Stats Grid */}
+                {videoStats.length > 0 && (
+                  <div className="mt-8">
+                    <h2 className="text-xl font-semibold text-gray-800 mb-4">Video Analysis Statistics</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {videoStats.map((stat) => (
+                        <div
+                          key={stat.id}
+                          className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
+                        >
+                          <div className="p-6">
+                            <div className="flex justify-between items-start mb-4">
+                              <div className={`p-3 rounded-lg ${stat.color}`}>
+                                <stat.icon className="w-6 h-6 text-white" />
+                              </div>
+                              <span className={`text-sm font-semibold flex items-center ${
+                                stat.isPositive ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {stat.isPositive ? <ArrowUp className="w-4 h-4 mr-1" /> : <ArrowDown className="w-4 h-4 mr-1" />}
+                                {stat.change}
+                              </span>
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-700">{stat.title}</h3>
+                            <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
+                          </div>
+                          <div className="h-1 w-full bg-gray-100">
+                            <div 
+                              className={`h-full ${stat.color}`}
+                              style={{ width: `${Math.max(30, Math.min(100, parseFloat(stat.value) || 75))}%` }}
+                            />
                           </div>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
+                    
+                    {/* Video Chart */}
+                    {videoChartData && (videoChartData.authentic.count > 0 || videoChartData.manipulated.count > 0) && (
+                      <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Video Detection Results (Last 30 Days)</h3>
+                        <div className="max-w-md mx-auto flex justify-around items-end h-64">
+                          <div className="flex flex-col items-center">
+                            <div className="w-24 bg-green-500 rounded-t-sm" style={{ 
+                              height: `${Math.max(4, getVideoDominantResult().authentic / 100 * 180)}px` 
+                            }}></div>
+                            <span className="text-sm mt-2 text-gray-600">Authentic</span>
+                            <span className="text-sm font-bold text-gray-700">{Math.round(getVideoDominantResult().authentic)}%</span>
+                            <span className="text-xs text-gray-500 mt-1">{videoChartData.authentic.count} videos</span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <div className="w-24 bg-red-500 rounded-t-sm" style={{ 
+                              height: `${Math.max(4, getVideoDominantResult().manipulated / 100 * 180)}px` 
+                            }}></div>
+                            <span className="text-sm mt-2 text-gray-600">Manipulated</span>
+                            <span className="text-sm font-bold text-gray-700">{Math.round(getVideoDominantResult().manipulated)}%</span>
+                            <span className="text-xs text-gray-500 mt-1">{videoChartData.manipulated.count} videos</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Recent Video Detections */}
+                    {recentVideoDetections.length > 0 && (
+                      <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Recent Video Detections</h3>
+                        <div className="space-y-4">
+                          {recentVideoDetections.map((detection, index) => (
+                            <div
+                              key={index}
+                              className="flex items-start border-b border-gray-100 pb-4 last:border-b-0 last:pb-0"
+                            >
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                detection.result === 'Authentic' ? 'bg-green-100' : 'bg-red-100'
+                              }`}>
+                                {detection.result === 'Authentic' ? (
+                                  <Check className={`w-5 h-5 text-green-600`} />
+                                ) : (
+                                  <AlertTriangle className={`w-5 h-5 text-red-600`} />
+                                )}
+                              </div>
+                              <div className="ml-3 flex-1">
+                                <div className="flex justify-between">
+                                  <p className="text-sm text-gray-800 font-medium">
+                                    {detection.filename}
+                                  </p>
+                                  <span className="text-xs text-gray-400">{detection.time}</span>
+                                </div>
+                                <div className="flex items-center mt-1">
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    detection.result === 'Authentic' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {detection.result}
+                                  </span>
+                                  <span className="text-xs text-gray-500 ml-2">{detection.confidence}</span>
+                                  <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full ml-2">
+                                    {detection.duration}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )
           )}
@@ -447,7 +664,7 @@ const DashboardContent = () => {
             <div className="space-y-6">
               <div className="bg-blue-50 rounded-lg p-4 text-blue-700 mb-4 flex items-start">
                 <Cpu className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" />
-                <p className="text-sm">Our system uses multiple detection methods to identify manipulated or AI-generated images with high accuracy.</p>
+                <p className="text-sm">Our system uses multiple detection methods to identify manipulated, AI-generated, or deepfake content with high accuracy.</p>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -462,6 +679,51 @@ const DashboardContent = () => {
                     <p className="text-sm text-gray-600">{method.description}</p>
                   </div>
                 ))}
+              </div>
+              
+              {/* Video Detection Methods */}
+              <h3 className="text-lg font-semibold text-gray-800 mt-8 mb-4">Video Deepfake Detection Techniques</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium text-gray-800">Temporal Consistency Analysis</h4>
+                    <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+                      94% accuracy
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">Analyzes consistency between frames to detect unnatural transitions or manipulation artifacts</p>
+                </div>
+                
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium text-gray-800">Face Tracking Artifacts</h4>
+                    <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+                      96% accuracy
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">Detects inconsistencies in facial landmarks, expressions, and movements between frames</p>
+                </div>
+                
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium text-gray-800">Compression Artifact Analysis</h4>
+                    <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+                      91% accuracy
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">Identifies inconsistent compression patterns that occur when synthesized content is inserted into real video</p>
+                </div>
+                
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium text-gray-800">Lip Sync Evaluation</h4>
+                    <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+                      93% accuracy
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">Detects misalignment between lip movements and speech, common in synthetic or manipulated videos</p>
+                </div>
               </div>
             </div>
           )}
@@ -520,6 +782,69 @@ const DashboardContent = () => {
                   ))}
                 </div>
               )}
+              
+              {/* Recent Videos Section */}
+              <div className="mt-8">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-medium text-gray-800">Recently Analyzed Videos</h3>
+                  {recentVideos.length > 0 && (
+                    <button 
+                      onClick={() => navigate('/profile')}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      View All
+                    </button>
+                  )}
+                </div>
+                
+                {recentVideos.length === 0 ? (
+                  <div className="text-center p-10 bg-gray-50 rounded-lg">
+                    <Video className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                    <p className="text-gray-600 font-medium">No videos analyzed yet</p>
+                    <p className="text-gray-500 mt-1">Start analyzing videos to see them here</p>
+                    <a 
+                      href="/video-analysis"
+                      className="inline-block mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      Analyze First Video
+                    </a>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {recentVideos.map((item) => (
+                      <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="h-36 bg-gray-100 relative flex items-center justify-center">
+                          <Video className="w-10 h-10 text-gray-300" />
+                          <div className="absolute top-2 right-2">
+                            <span className={`${
+                              item.is_real ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            } text-xs px-2 py-1 rounded-full`}>
+                              {item.is_real ? 'Authentic' : (item.manipulation_type || 'Manipulated')}
+                            </span>
+                          </div>
+                          <div className="absolute bottom-2 left-2">
+                            <span className="bg-gray-800 bg-opacity-75 text-white text-xs px-2 py-1 rounded-full">
+                              {item.duration_formatted}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="p-3">
+                          <p className="text-sm font-medium text-gray-800">{item.original_filename}</p>
+                          <div className="flex justify-between items-center mt-1">
+                            <span className="text-xs text-gray-500">Scanned {formatTimeAgo(item.created_at)}</span>
+                            <span className="text-xs font-medium text-gray-700">
+                              {item.is_real ? 
+                                `${(item.real_score * 100).toFixed(0)}% authentic` : 
+                                `${(item.deepfake_probability * 100).toFixed(0)}% fake`
+                              }
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -528,7 +853,7 @@ const DashboardContent = () => {
       {/* Quick actions section */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h3 className="text-lg font-semibold mb-4 text-gray-800">Quick Actions</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <a 
             href="/image-analysis"
             className="flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium py-3 px-4 rounded-lg transition-colors"
@@ -536,13 +861,20 @@ const DashboardContent = () => {
             <Image className="w-5 h-5 mr-2" />
             Analyze New Image
           </a>
+          <a 
+            href="/video-analysis"
+            className="flex items-center justify-center bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium py-3 px-4 rounded-lg transition-colors"
+          >
+            <Video className="w-5 h-5 mr-2" />
+            Analyze New Video
+          </a>
           {hasAnalysisData() && (
             <button 
               onClick={() => navigate('/profile')}
               className="flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium py-3 px-4 rounded-lg transition-colors"
             >
               <Users className="w-5 h-5 mr-2" />
-              View Detection History
+              View History
             </button>
           )}
           <button 

@@ -3,7 +3,6 @@ import {
   Upload, 
   Video, 
   X, 
-  FileText, 
   Shield, 
   Check, 
   AlertCircle,
@@ -17,8 +16,10 @@ import {
   VolumeX,
   SkipForward,
   SkipBack,
-  Maximize
+  Maximize,
+  AlertTriangle
 } from 'lucide-react';
+import ApiService from '../../services/ApiService';
 
 const VideoAnalysisContent = () => {
   const [video, setVideo] = useState(null);
@@ -31,6 +32,8 @@ const VideoAnalysisContent = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState('');
   
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
@@ -61,6 +64,8 @@ const VideoAnalysisContent = () => {
       setAnalysisResults(null);
       setIsPlaying(false);
       setCurrentTime(0);
+      setUploadProgress(0);
+      setUploadStatus('');
     };
     reader.readAsDataURL(file);
   };
@@ -94,6 +99,8 @@ const VideoAnalysisContent = () => {
     setError(null);
     setIsPlaying(false);
     setCurrentTime(0);
+    setUploadProgress(0);
+    setUploadStatus('');
   };
 
   const analyzeVideo = async () => {
@@ -101,38 +108,40 @@ const VideoAnalysisContent = () => {
     
     setIsAnalyzing(true);
     setError(null);
+    setUploadProgress(0);
+    setUploadStatus('Preparing video for analysis...');
     
     try {
-      // Simulate API call with setTimeout
-      setTimeout(() => {
-        // Mock analysis results
-        setAnalysisResults({
-          deepfake_probability: 0.87,
-          authenticity_score: 0.13,
-          manipulation_type: 'Face Swap',
-          detected_frames: 34,
-          total_frames: 120,
-          confidence: 0.92,
-          detection_regions: [
-            { start_time: 2.4, end_time: 5.6, type: 'Face Manipulation' },
-            { start_time: 12.1, end_time: 18.3, type: 'Voice Synthesis' },
-          ],
-          audio_analysis: {
-            authenticity: 0.22,
-            voice_cloning_detected: true,
-            voice_manipulation_regions: [
-              { start_time: 3.2, end_time: 8.7 },
-              { start_time: 14.5, end_time: 20.1 },
-            ]
-          }
-        });
-        
-        setIsAnalyzing(false);
-      }, 3000);
+      // Create FormData to send the video
+      const formData = new FormData();
+      formData.append('video', video);
+      
+      // Define upload progress handler
+      const progressHandler = (progressEvent) => {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        setUploadProgress(percentCompleted);
+        setUploadStatus(`Uploading video... ${percentCompleted}%`);
+      };
+      
+      // Call the API to analyze the video
+      setUploadStatus('Uploading video...');
+      const response = await ApiService.analyzeVideo(formData, progressHandler);
+      
+      if (response.success) {
+        setUploadStatus('Processing video frames...');
+        setAnalysisResults(response);
+        setUploadStatus('Analysis complete!');
+      } else {
+        setError(response.error || 'Analysis failed. Please try another video.');
+        setUploadStatus('');
+      }
     } catch (err) {
       console.error('Error analyzing video:', err);
-      setError('Server error. Please try again later.');
+      setError(err.error || 'Server error. Please try again later.');
+      setUploadStatus('');
+    } finally {
       setIsAnalyzing(false);
+      setUploadProgress(0);
     }
   };
 
@@ -197,12 +206,46 @@ const VideoAnalysisContent = () => {
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
+  // Check if current playback time is in a detected manipulation region
+  const isInManipulationRegion = () => {
+    if (!analysisResults || !analysisResults.detection_regions) return false;
+    
+    return analysisResults.detection_regions.some(
+      region => currentTime >= region.start_time && currentTime <= region.end_time
+    );
+  };
+  
+  // Get current region info
+  const getCurrentRegionInfo = () => {
+    if (!analysisResults || !analysisResults.detection_regions) return null;
+    
+    const currentRegion = analysisResults.detection_regions.find(
+      region => currentTime >= region.start_time && currentTime <= region.end_time
+    );
+    
+    return currentRegion;
+  };
+
+  // Jump to next detected manipulation
+  const jumpToNextManipulation = () => {
+    if (!analysisResults || !analysisResults.detection_regions || !videoRef.current) return;
+    
+    const nextRegion = analysisResults.detection_regions.find(
+      region => region.start_time > currentTime
+    );
+    
+    if (nextRegion) {
+      videoRef.current.currentTime = nextRegion.start_time;
+      setCurrentTime(nextRegion.start_time);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page header */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
         <h1 className="text-2xl font-bold text-gray-800">Video Analysis & Deepfake Detection</h1>
-        <p className="text-gray-500 mt-1">Upload a video to analyze and check if it contains manipulated content.</p>
+        <p className="text-gray-500 mt-1">Upload a video to analyze and detect manipulated content by analyzing individual video frames.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -245,18 +288,43 @@ const VideoAnalysisContent = () => {
                     controls={false}
                   />
                   
+                  {/* Manipulation region indicator */}
+                  {analysisResults && isInManipulationRegion() && (
+                    <div className="absolute top-0 left-0 right-0 bg-red-500 text-white text-center text-xs py-1 px-2 animate-pulse">
+                      Deepfake Detected: {getCurrentRegionInfo()?.type || 'Face Manipulation'}
+                    </div>
+                  )}
+                  
                   {/* Custom video controls */}
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-white text-xs">{formatTime(currentTime)}</span>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={(currentTime / (duration || 1)) * 100}
-                        onChange={handleSeek}
-                        className="w-full mx-2 cursor-pointer"
-                      />
+                      <div className="w-full mx-2 relative">
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={(currentTime / (duration || 1)) * 100}
+                          onChange={handleSeek}
+                          className="w-full cursor-pointer"
+                        />
+                        
+                        {/* Manipulation regions on timeline */}
+                        {analysisResults && analysisResults.detection_regions && (
+                          <div className="absolute top-0 left-0 right-0 h-1.5 pointer-events-none">
+                            {analysisResults.detection_regions.map((region, index) => (
+                              <div 
+                                key={index} 
+                                className="absolute h-full bg-red-500"
+                                style={{ 
+                                  left: `${(region.start_time / duration) * 100}%`, 
+                                  width: `${((region.end_time - region.start_time) / duration) * 100}%` 
+                                }}
+                              ></div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <span className="text-white text-xs">{formatTime(duration)}</span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -310,9 +378,37 @@ const VideoAnalysisContent = () => {
             )}
             
             {isAnalyzing && (
-              <div className="mt-4 w-full bg-blue-100 text-blue-700 font-medium py-3 px-4 rounded-lg flex items-center justify-center">
-                <Loader className="w-5 h-5 mr-2 animate-spin" />
-                Analyzing Video...
+              <div className="mt-4">
+                {uploadStatus && (
+                  <p className="text-sm text-blue-700 mb-2">{uploadStatus}</p>
+                )}
+                
+                {uploadProgress > 0 && (
+                  <div className="w-full h-2 bg-gray-200 rounded-full mb-3">
+                    <div 
+                      className="h-full bg-blue-600 rounded-full" 
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                )}
+                
+                <div className="w-full bg-blue-100 text-blue-700 font-medium py-3 px-4 rounded-lg flex items-center justify-center">
+                  <Loader className="w-5 h-5 mr-2 animate-spin" />
+                  Analyzing Video...
+                </div>
+              </div>
+            )}
+            
+            {/* Navigation buttons for detected manipulations */}
+            {analysisResults && analysisResults.detection_regions && analysisResults.detection_regions.length > 0 && (
+              <div className="mt-4">
+                <button
+                  onClick={jumpToNextManipulation}
+                  className="w-full bg-red-100 hover:bg-red-200 text-red-700 font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center"
+                >
+                  <AlertTriangle className="w-5 h-5 mr-2" />
+                  Jump to Next Detected Manipulation
+                </button>
               </div>
             )}
           </div>
@@ -392,7 +488,7 @@ const VideoAnalysisContent = () => {
                   <div className="grid grid-cols-2 gap-4 mt-4">
                     <div className="bg-white p-3 rounded-lg border border-gray-200">
                       <div className="text-sm text-gray-500">Manipulation Type</div>
-                      <div className="font-medium text-gray-800">{analysisResults.manipulation_type}</div>
+                      <div className="font-medium text-gray-800">{analysisResults.manipulation_type || 'None Detected'}</div>
                     </div>
                     <div className="bg-white p-3 rounded-lg border border-gray-200">
                       <div className="text-sm text-gray-500">Affected Frames</div>
@@ -406,82 +502,66 @@ const VideoAnalysisContent = () => {
                   </div>
                 </div>
                 
-                {/* Time regions */}
-                <div>
-                  <div className="flex items-center mb-3">
-                    <Clock className="w-5 h-5 text-blue-600 mr-2" />
-                    <h3 className="font-medium text-gray-800">Manipulated Segments</h3>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {analysisResults.detection_regions.map((region, index) => (
-                      <div key={index} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-700">{region.type}</span>
-                          <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                            {formatTime(region.start_time)} - {formatTime(region.end_time)}
-                          </span>
-                        </div>
-                        <div className="mt-2 w-full h-1.5 bg-gray-200 rounded-full relative">
-                          <div 
-                            className="absolute h-full bg-red-500 rounded-full"
-                            style={{ 
-                              left: `${(region.start_time / duration) * 100}%`, 
-                              width: `${((region.end_time - region.start_time) / duration) * 100}%` 
-                            }}
-                          ></div>
-                        </div>
+                {/* Video metadata */}
+                {analysisResults.video_metadata && (
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-center mb-3">
+                      <Video className="w-5 h-5 text-blue-600 mr-2" />
+                      <h3 className="font-medium text-gray-800">Video Properties</h3>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-white p-2 rounded-lg border border-gray-200 text-center">
+                        <div className="text-xs text-gray-500">Duration</div>
+                        <div className="font-medium text-gray-800">{formatTime(analysisResults.video_metadata.duration)}</div>
                       </div>
-                    ))}
+                      <div className="bg-white p-2 rounded-lg border border-gray-200 text-center">
+                        <div className="text-xs text-gray-500">Resolution</div>
+                        <div className="font-medium text-gray-800">{analysisResults.video_metadata.resolution}</div>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-gray-200 text-center">
+                        <div className="text-xs text-gray-500">Frame Rate</div>
+                        <div className="font-medium text-gray-800">{analysisResults.video_metadata.fps.toFixed(1)} fps</div>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-gray-200 text-center">
+                        <div className="text-xs text-gray-500">Total Frames</div>
+                        <div className="font-medium text-gray-800">{analysisResults.video_metadata.frames}</div>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
                 
-                {/* Audio analysis */}
-                <div>
-                  <div className="flex items-center mb-3">
-                    <Volume2 className="w-5 h-5 text-blue-600 mr-2" />
-                    <h3 className="font-medium text-gray-800">Audio Analysis</h3>
-                  </div>
-                  
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-gray-700">Audio Authenticity</span>
-                      <span className={`text-sm font-medium ${
-                        analysisResults.audio_analysis.authenticity < 0.5 ? 'text-red-600' : 'text-green-600'
-                      }`}>
-                        {(analysisResults.audio_analysis.authenticity * 100).toFixed(1)}%
-                      </span>
+                {/* Time regions */}
+                {analysisResults.detection_regions && analysisResults.detection_regions.length > 0 && (
+                  <div>
+                    <div className="flex items-center mb-3">
+                      <Clock className="w-5 h-5 text-blue-600 mr-2" />
+                      <h3 className="font-medium text-gray-800">Manipulated Segments</h3>
                     </div>
                     
-                    <div className="w-full h-2 bg-gray-200 rounded-full mb-4">
-                      <div 
-                        className={analysisResults.audio_analysis.authenticity < 0.5 ? 'bg-red-500' : 'bg-green-500'}
-                        style={{ width: `${analysisResults.audio_analysis.authenticity * 100}%`, height: '100%' }}
-                      ></div>
-                    </div>
-                    
-                    <div className="text-sm font-medium text-gray-700 mb-2">
-                      {analysisResults.audio_analysis.voice_cloning_detected ? 
-                        "Voice cloning detected" : "No voice cloning detected"}
-                    </div>
-                    
-                    {analysisResults.audio_analysis.voice_manipulation_regions.length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-xs text-gray-500 mb-2">Voice manipulation regions:</p>
-                        <div className="space-y-2">
-                          {analysisResults.audio_analysis.voice_manipulation_regions.map((region, index) => (
-                            <div key={index} className="text-xs flex justify-between">
-                              <span className="text-gray-600">Region {index + 1}</span>
-                              <span className="text-gray-800">
-                                {formatTime(region.start_time)} - {formatTime(region.end_time)}
-                              </span>
-                            </div>
-                          ))}
+                    <div className="space-y-3">
+                      {analysisResults.detection_regions.map((region, index) => (
+                        <div key={index} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium text-gray-700">{region.type}</span>
+                            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                              {formatTime(region.start_time)} - {formatTime(region.end_time)}
+                            </span>
+                          </div>
+                          <div className="mt-2 w-full h-1.5 bg-gray-200 rounded-full relative">
+                            <div 
+                              className="absolute h-full bg-red-500 rounded-full"
+                              style={{ 
+                                left: `${(region.start_time / duration) * 100}%`, 
+                                width: `${((region.end_time - region.start_time) / duration) * 100}%` 
+                              }}
+                            ></div>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>
