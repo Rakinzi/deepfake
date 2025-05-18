@@ -14,6 +14,13 @@ class AuthService {
       
       if (response.data.access_token) {
         localStorage.setItem('user', JSON.stringify(response.data.user));
+
+        const userData = response.data.user;
+
+        if(userData && userData.id){
+          userData.id = userData.id.toString();
+          localStorage.setItem('user', JSON.stringify(userData));
+        }
         localStorage.setItem('access_token', response.data.access_token);
         localStorage.setItem('refresh_token', response.data.refresh_token);
       }
