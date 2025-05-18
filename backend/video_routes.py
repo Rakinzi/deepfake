@@ -31,6 +31,9 @@ def analyze_image_with_huggingface(img_data):
 def analyze_video_api():
     current_user_id = get_jwt_identity()
     
+    # Define the stricter threshold for video frames
+    VIDEO_REAL_THRESHOLD = 0.8  # Stricter threshold specifically for video frames
+    
     if 'video' not in request.files:
         return jsonify({
             'success': False,
@@ -141,7 +144,12 @@ def analyze_video_api():
             
             if analysis_result['success'] and 'faces' in analysis_result and analysis_result['faces']:
                 face = analysis_result['faces'][0]
-                is_fake = not face['is_real']
+                
+                # Apply the stricter threshold for video frames
+                real_score = float(face['real_score'])
+                # A frame is fake if its real score is below the VIDEO_REAL_THRESHOLD (0.8)
+                is_fake = real_score < VIDEO_REAL_THRESHOLD
+                
                 confidence = face['confidence']
                 frame_time = frame_idx / fps
                 
@@ -150,6 +158,7 @@ def analyze_video_api():
                     'frame_index': frame_idx,
                     'time': frame_time,
                     'is_fake': is_fake,
+                    'real_score': real_score,
                     'confidence': confidence,
                     'spoofing_type': face['spoofing_type'] if is_fake else None
                 })
@@ -215,7 +224,7 @@ def analyze_video_api():
             """,
             (
                 video_id,
-                authenticity_score > 0.5,  # is_real
+                authenticity_score > 0.5,  # is_real - keeping the original threshold for the overall video
                 float(authenticity_score),  # real_score
                 float(deepfake_probability),  # deepfake_probability
                 manipulation_type,  # manipulation_type
@@ -243,7 +252,8 @@ def analyze_video_api():
                 'fps': fps,
                 'resolution': resolution,
                 'frames': frame_count
-            }
+            },
+            'threshold_used': VIDEO_REAL_THRESHOLD  # Include the threshold used for transparency
         }
         
         print("Video analysis completed successfully")
@@ -262,6 +272,7 @@ def analyze_video_api():
             cursor.close()
         if 'conn' in locals() and conn:
             conn.close()
+
 
 @video_bp.route('/history', methods=['GET'])
 @jwt_required()
