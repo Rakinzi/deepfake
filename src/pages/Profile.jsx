@@ -1,154 +1,74 @@
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../components/layouts/DashboardLayouts';
-import { 
-  User, 
-  Lock, 
-  Mail, 
-  Clock, 
-  Edit, 
-  X, 
-  Check, 
-  Image as ImageIcon,
-  Shield,
-  AlertCircle,
-  History,
-  Video,
-  Info
-} from 'lucide-react';
+import { User, Lock, Mail, Clock, Edit, X, Check, Image as ImageIcon, Shield, AlertCircle, History, Video, Info } from 'lucide-react';
 import AuthService from '../services/AuthService';
-import { motion } from 'framer-motion';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 
 const Profile = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('profile');
   const [history, setHistory] = useState([]);
   const [videoHistory, setVideoHistory] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
+  const [formData, setFormData] = useState({ username: '', email: '', currentPassword: '', newPassword: '', confirmPassword: '' });
 
-  useEffect(()=> {
-    document.title = 'Profile';
-  }, [])
-  
-  // Load user data
+  useEffect(() => { document.title = 'Profile'; }, []);
+
   useEffect(() => {
     const fetchUserData = async () => {
       try {
         setLoading(true);
         setError(null);
-        
-        // Get user profile
         const response = await AuthService.getUserProfile();
         if (response.success) {
           setUser(response.user);
-          setFormData({
-            ...formData,
-            username: response.user.username,
-            email: response.user.email
-          });
+          setFormData((f) => ({ ...f, username: response.user.username, email: response.user.email }));
         }
-      } catch (err) {
-        setError('Failed to load profile data');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
+      } catch { setError('Failed to load profile data'); }
+      finally { setLoading(false); }
     };
-    
     fetchUserData();
   }, []);
-  
-  // Load history when tab is changed to history
-  useEffect(() => {
-    if (activeTab === 'history') {
-      loadHistory();
-      loadVideoHistory();
-    }
-  }, [activeTab]);
-  
+
   const loadHistory = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const response = await AuthService.getUserHistory();
-      if (response.success) {
-        setHistory(response.history);
-      }
-    } catch (err) {
-      console.error('Error loading history:', err);
-    } finally {
-      setLoading(false);
-    }
+      if (response.success) setHistory(response.history);
+    } catch { } finally { setLoading(false); }
   };
-  
+
   const loadVideoHistory = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const response = await fetch('/api/video/history', {
-        headers: {
-          'Authorization': `Bearer ${AuthService.getToken()}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setVideoHistory(data.history);
-        }
-      }
-    } catch (err) {
-      console.error('Error loading video history:', err);
-    } finally {
-      setLoading(false);
-    }
+      const response = await fetch('/api/video/history', { headers: { Authorization: `Bearer ${AuthService.getToken()}` } });
+      if (response.ok) { const data = await response.json(); if (data.success) setVideoHistory(data.history); }
+    } catch { } finally { setLoading(false); }
   };
-  
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value
-    });
+
+  const handleTabChange = (val) => {
+    if (val === 'history') { loadHistory(); loadVideoHistory(); }
   };
-  
-  const handleProfileSubmit = async (e) => {
-    e.preventDefault();
-    // This would be implemented to update user profile
-    // For now, we'll just toggle editing mode
-    setIsEditing(false);
-  };
-  
-  const handlePasswordSubmit = async (e) => {
-    e.preventDefault();
-    // Password change logic would be implemented here
-    alert('Password change functionality would be implemented here');
-  };
-  
-  // Format date for display
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
-  };
-  
-  // Format duration for display
-  const formatDuration = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
-  };
-  
+
+  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleProfileSubmit = (e) => { e.preventDefault(); setIsEditing(false); };
+  const handlePasswordSubmit = (e) => { e.preventDefault(); alert('Password change functionality would be implemented here'); };
+
+  const formatDate = (d) => new Date(d).toLocaleString();
+  const formatDuration = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
   if (loading && !user) {
     return (
       <DashboardLayout>
         <div className="flex justify-center items-center h-64">
-          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+          <div className="w-8 h-8 border-4 border-border border-t-foreground rounded-full animate-spin" />
         </div>
       </DashboardLayout>
     );
@@ -158,393 +78,209 @@ const Profile = () => {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <h1 className="text-2xl font-bold text-gray-800">User Profile</h1>
-          <p className="text-gray-500 mt-1">Manage your account information and view analysis history</p>
-        </div>
-        
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">User Profile</CardTitle>
+            <CardDescription>Manage your account and view analysis history</CardDescription>
+          </CardHeader>
+        </Card>
+
         {error && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg border border-red-100 flex items-start">
-            <AlertCircle className="w-5 h-5 mr-2 mt-0.5" />
-            <p>{error}</p>
+          <div className="bg-destructive/10 text-destructive border border-destructive/20 p-3 rounded-md flex items-center gap-2 text-sm">
+            <AlertCircle className="w-4 h-4 shrink-0" /> {error}
           </div>
         )}
-        
-        {/* Tabs */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="border-b border-gray-200">
-            <div className="flex">
-              <button
-                onClick={() => setActiveTab('profile')}
-                className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'profile'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Profile Information
-              </button>
-              <button
-                onClick={() => setActiveTab('security')}
-                className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'security'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Security
-              </button>
-              <button
-                onClick={() => setActiveTab('history')}
-                className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'history'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Analysis History
-              </button>
-            </div>
-          </div>
-          
-          {/* Tab Content */}
-          <div className="p-6">
-            {/* Profile Tab */}
-            {activeTab === 'profile' && (
-              <div>
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-lg font-semibold text-gray-800">Personal Information</h2>
+
+        <Card>
+          <CardContent className="p-6">
+            <Tabs defaultValue="profile" onValueChange={handleTabChange}>
+              <TabsList className="mb-6">
+                <TabsTrigger value="profile">Profile</TabsTrigger>
+                <TabsTrigger value="security">Security</TabsTrigger>
+                <TabsTrigger value="history">History</TabsTrigger>
+              </TabsList>
+
+              {/* Profile Tab */}
+              <TabsContent value="profile">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="font-semibold">Personal Information</h2>
                   {!isEditing && (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="flex items-center text-blue-600 text-sm font-medium"
-                    >
-                      <Edit className="w-4 h-4 mr-1" />
-                      Edit
-                    </button>
+                    <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} className="gap-1 h-8">
+                      <Edit className="w-3.5 h-3.5" /> Edit
+                    </Button>
                   )}
                 </div>
-                
+
                 {isEditing ? (
-                  <form onSubmit={handleProfileSubmit} className="space-y-4">
-                    <div>
-                      <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-                        Username
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <User className="h-5 w-5 text-gray-400" />
-                        </div>
-                        <input
-                          type="text"
-                          name="username"
-                          id="username"
-                          value={formData.username}
-                          onChange={handleChange}
-                          className="pl-10 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm py-2 border"
-                        />
-                      </div>
+                  <form onSubmit={handleProfileSubmit} className="space-y-4 max-w-md">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="username">Username</Label>
+                      <Input id="username" name="username" value={formData.username} onChange={handleChange} />
                     </div>
-                    
-                    <div>
-                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                        Email Address
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <Mail className="h-5 w-5 text-gray-400" />
-                        </div>
-                        <input
-                          type="email"
-                          name="email"
-                          id="email"
-                          value={formData.email}
-                          onChange={handleChange}
-                          className="pl-10 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm py-2 border"
-                        />
-                      </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="email">Email Address</Label>
+                      <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} />
                     </div>
-                    
-                    <div className="flex space-x-3 pt-4">
-                      <button
-                        type="button"
-                        onClick={() => setIsEditing(false)}
-                        className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      >
-                        <X className="w-4 h-4 mr-2" />
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      >
-                        <Check className="w-4 h-4 mr-2" />
-                        Save Changes
-                      </button>
+                    <div className="flex gap-3">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(false)} className="gap-1">
+                        <X className="w-3.5 h-3.5" /> Cancel
+                      </Button>
+                      <Button type="submit" size="sm" className="gap-1">
+                        <Check className="w-3.5 h-3.5" /> Save Changes
+                      </Button>
                     </div>
                   </form>
                 ) : (
-                  <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                    <div className="flex items-center">
-                      <User className="w-5 h-5 text-gray-500 mr-3" />
-                      <div>
-                        <p className="text-sm text-gray-500">Username</p>
-                        <p className="font-medium">{user?.username}</p>
+                  <div className="bg-muted/40 rounded-lg p-4 space-y-4 max-w-md">
+                    {[
+                      { icon: User, label: 'Username', value: user?.username },
+                      { icon: Mail, label: 'Email', value: user?.email },
+                      { icon: Clock, label: 'Member since', value: user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown' },
+                    ].map(({ icon: Icon, label, value }) => (
+                      <div key={label} className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center shrink-0">
+                          <Icon className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">{label}</p>
+                          <p className="text-sm font-medium">{value}</p>
+                        </div>
                       </div>
-                    </div>
-                    
-                    <div className="flex items-center">
-                      <Mail className="w-5 h-5 text-gray-500 mr-3" />
-                      <div>
-                        <p className="text-sm text-gray-500">Email</p>
-                        <p className="font-medium">{user?.email}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center">
-                      <Clock className="w-5 h-5 text-gray-500 mr-3" />
-                      <div>
-                        <p className="text-sm text-gray-500">Account Created</p>
-                        <p className="font-medium">{user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}</p>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 )}
-              </div>
-            )}
-            
-            {/* Security Tab */}
-            {activeTab === 'security' && (
-              <div>
+              </TabsContent>
+
+              {/* Security Tab */}
+              <TabsContent value="security">
                 <div className="mb-6">
-                  <h2 className="text-lg font-semibold text-gray-800">Password</h2>
-                  <p className="text-gray-500 text-sm mt-1">Update your password to ensure account security</p>
+                  <h2 className="font-semibold mb-1">Change Password</h2>
+                  <p className="text-sm text-muted-foreground">Update your password to keep your account secure</p>
                 </div>
-                
-                <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-lg">
-                  <div>
-                    <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                      Current Password
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Lock className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="password"
-                        name="currentPassword"
-                        id="currentPassword"
-                        value={formData.currentPassword}
-                        onChange={handleChange}
-                        className="pl-10 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm py-2 border"
-                        placeholder="Enter your current password"
-                      />
+                <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-md">
+                  {[
+                    { id: 'currentPassword', label: 'Current Password', placeholder: 'Enter current password' },
+                    { id: 'newPassword', label: 'New Password', placeholder: 'Enter new password' },
+                    { id: 'confirmPassword', label: 'Confirm New Password', placeholder: 'Confirm new password' },
+                  ].map(({ id, label, placeholder }) => (
+                    <div key={id} className="space-y-1.5">
+                      <Label htmlFor={id}>{label}</Label>
+                      <Input id={id} name={id} type="password" value={formData[id]} onChange={handleChange} placeholder={placeholder} />
                     </div>
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                      New Password
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Lock className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="password"
-                        name="newPassword"
-                        id="newPassword"
-                        value={formData.newPassword}
-                        onChange={handleChange}
-                        className="pl-10 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm py-2 border"
-                        placeholder="Enter your new password"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                      Confirm New Password
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Lock className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="password"
-                        name="confirmPassword"
-                        id="confirmPassword"
-                        value={formData.confirmPassword}
-                        onChange={handleChange}
-                        className="pl-10 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm py-2 border"
-                        placeholder="Confirm your new password"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="pt-4">
-                    <button
-                      type="submit"
-                      className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      Update Password
-                    </button>
-                  </div>
+                  ))}
+                  <Button type="submit" size="sm">Update Password</Button>
                 </form>
-                
-                <div className="mt-8 border-t border-gray-200 pt-6">
-                  <h2 className="text-lg font-semibold text-gray-800 mb-4">Sessions & Security</h2>
-                  
-                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start mb-4">
-                    <Shield className="w-5 h-5 text-blue-600 mr-2 mt-0.5" />
-                    <div>
-                      <p className="text-sm text-blue-700 font-medium">Your account is secure</p>
-                      <p className="text-sm text-blue-600 mt-1">We recommend using a strong password and enabling two-factor authentication when available.</p>
-                    </div>
+
+                <Separator className="my-6" />
+
+                <div className="bg-muted/40 border border-border rounded-lg p-4 flex items-start gap-3 max-w-md">
+                  <Shield className="w-5 h-5 text-foreground mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">Your account is secure</p>
+                    <p className="text-xs text-muted-foreground mt-1">Use a strong, unique password and keep it private.</p>
                   </div>
                 </div>
-              </div>
-            )}
-            
-            {/* History Tab */}
-            {activeTab === 'history' && (
-              <div>
-                <div className="mb-6">
-                  <h2 className="text-lg font-semibold text-gray-800">Image Analysis History</h2>
-                  <p className="text-gray-500 text-sm mt-1">View all your previous image analysis results</p>
+              </TabsContent>
+
+              {/* History Tab */}
+              <TabsContent value="history">
+                <div className="mb-4">
+                  <h2 className="font-semibold">Image Analysis History</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">All your previous image analysis results</p>
                 </div>
-                
+
                 {loading ? (
-                  <div className="flex justify-center items-center h-40">
-                    <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                  <div className="flex justify-center py-10">
+                    <div className="w-8 h-8 border-4 border-border border-t-foreground rounded-full animate-spin" />
                   </div>
                 ) : history.length === 0 ? (
-                  <div className="text-center p-8 bg-gray-50 rounded-lg border border-gray-100">
-                    <History className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                    <p className="text-gray-500">No image analysis history found. Start analyzing images to see your history.</p>
+                  <div className="text-center p-10 bg-muted/30 rounded-lg border border-border">
+                    <History className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">No image analysis history found.</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {history.map((item) => (
-                      <motion.div 
-                        key={item.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="border border-gray-200 rounded-lg overflow-hidden"
-                      >
-                        <div className="flex flex-col sm:flex-row">
-                          <div className="sm:w-40 h-32 bg-gray-100 flex items-center justify-center">
-                            <ImageIcon className="w-10 h-10 text-gray-400" />
+                      <div key={item.id} className="border border-border rounded-lg overflow-hidden flex flex-col sm:flex-row">
+                        <div className="sm:w-36 h-28 bg-muted flex items-center justify-center shrink-0">
+                          <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                        <div className="p-4 flex-1">
+                          <div className="flex justify-between items-start gap-2">
+                            <div>
+                              <p className="font-medium text-sm">{item.original_filename}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">Analyzed {formatDate(item.created_at)}</p>
+                            </div>
+                            <Badge variant={item.is_real ? 'outline' : 'destructive'} className="shrink-0">
+                              {item.is_real ? 'Authentic' : 'Fake'}
+                            </Badge>
                           </div>
-                          <div className="p-4 flex-1">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <p className="font-medium text-gray-800">{item.original_filename}</p>
-                                <p className="text-sm text-gray-500 mt-1">Analyzed on {formatDate(item.created_at)}</p>
-                              </div>
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                item.is_real ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                              }`}>
-                                {item.is_real ? 'Authentic' : 'Fake/AI-Generated'}
-                              </span>
-                            </div>
-                            
-                            <div className="mt-4 flex items-center">
-                              <div className="text-sm text-gray-600">
-                                <span className="font-medium">Confidence:</span> {(item.real_score * 100).toFixed(1)}%
-                              </div>
-                              {item.spoofing_type && (
-                                <div className="ml-6 text-sm text-gray-600">
-                                  <span className="font-medium">Type:</span> {item.spoofing_type}
-                                </div>
-                              )}
-                            </div>
+                          <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                            <span><span className="font-medium text-foreground">Confidence:</span> {(item.real_score * 100).toFixed(1)}%</span>
+                            {item.spoofing_type && <span><span className="font-medium text-foreground">Type:</span> {item.spoofing_type}</span>}
                           </div>
                         </div>
-                      </motion.div>
+                      </div>
                     ))}
                   </div>
                 )}
 
-                {/* Video Analysis History */}
-                <div className="mt-8 border-t border-gray-200 pt-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Video Analysis History</h3>
-                  
-                  <div className="bg-blue-50 p-4 rounded-lg text-blue-700 mb-6 flex items-start">
-                    <Info className="w-5 h-5 mr-2 mt-0.5" />
-                    <div>
-                      <p className="font-medium">Your video analysis history</p>
-                      <p className="text-sm mt-1">Below are the videos you've analyzed for deepfake detection.</p>
-                    </div>
-                  </div>
-                  
-                  {videoHistory && videoHistory.length === 0 ? (
-                    <div className="text-center p-8 bg-gray-50 rounded-lg border border-gray-100">
-                      <Video className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                      <p className="text-gray-500">No video analysis history found. Start analyzing videos to see your history.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {videoHistory && videoHistory.map((item) => (
-                        <motion.div 
-                          key={item.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="border border-gray-200 rounded-lg overflow-hidden"
-                        >
-                          <div className="flex flex-col sm:flex-row">
-                            <div className="sm:w-40 h-28 bg-gray-100 flex items-center justify-center relative">
-                              <Video className="w-10 h-10 text-gray-400" />
-                              {item.duration && (
-                                <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-0.5 rounded">
-                                  {formatDuration(item.duration)}
-                                </div>
-                              )}
-                            </div>
-                            <div className="p-4 flex-1">
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <p className="font-medium text-gray-800">{item.original_filename}</p>
-                                  <p className="text-sm text-gray-500 mt-1">Analyzed on {formatDate(item.created_at)}</p>
-                                </div>
-                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                  item.is_real ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                }`}>
-                                  {item.is_real ? 'Authentic' : (item.manipulation_type || 'Manipulated')}
-                                </span>
-                              </div>
-                              
-                              <div className="mt-4 flex flex-wrap gap-4">
-                                <div className="text-sm text-gray-600">
-                                  <span className="font-medium">Confidence:</span> {(item.is_real ? 
-                                    (item.real_score * 100) : 
-                                    (item.deepfake_probability * 100)).toFixed(1)}%
-                                </div>
-                                {item.resolution && (
-                                  <div className="text-sm text-gray-600">
-                                    <span className="font-medium">Resolution:</span> {item.resolution}
-                                  </div>
-                                )}
-                                {item.detected_frames && item.total_frames && (
-                                  <div className="text-sm text-gray-600">
-                                    <span className="font-medium">Affected Frames:</span> {item.detected_frames}/{item.total_frames} 
-                                    ({Math.round(item.detected_frames/item.total_frames*100)}%)
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
+                <Separator className="my-6" />
+
+                <div className="mb-4">
+                  <h2 className="font-semibold">Video Analysis History</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">All your previous video analysis results</p>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
+
+                {videoHistory.length === 0 ? (
+                  <div className="text-center p-10 bg-muted/30 rounded-lg border border-border">
+                    <Video className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">No video analysis history found.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {videoHistory.map((item) => (
+                      <div key={item.id} className="border border-border rounded-lg overflow-hidden flex flex-col sm:flex-row">
+                        <div className="sm:w-36 h-28 bg-muted flex items-center justify-center relative shrink-0">
+                          <Video className="w-8 h-8 text-muted-foreground" />
+                          {item.duration && (
+                            <div className="absolute bottom-2 left-2 bg-foreground/80 text-background text-xs px-1.5 py-0.5 rounded">
+                              {formatDuration(item.duration)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-4 flex-1">
+                          <div className="flex justify-between items-start gap-2">
+                            <div>
+                              <p className="font-medium text-sm">{item.original_filename}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">Analyzed {formatDate(item.created_at)}</p>
+                            </div>
+                            <Badge variant={item.is_real ? 'outline' : 'destructive'} className="shrink-0">
+                              {item.is_real ? 'Authentic' : (item.manipulation_type || 'Manipulated')}
+                            </Badge>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                            <span>
+                              <span className="font-medium text-foreground">Confidence:</span>{' '}
+                              {(item.is_real ? item.real_score * 100 : item.deepfake_probability * 100).toFixed(1)}%
+                            </span>
+                            {item.resolution && <span><span className="font-medium text-foreground">Resolution:</span> {item.resolution}</span>}
+                            {item.detected_frames && item.total_frames && (
+                              <span>
+                                <span className="font-medium text-foreground">Affected:</span>{' '}
+                                {item.detected_frames}/{item.total_frames} ({Math.round(item.detected_frames / item.total_frames * 100)}%)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );

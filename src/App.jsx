@@ -8,6 +8,7 @@ import VideoAnalysisPage from "./pages/VideoAnalysisPage"
 import AudioAnalysisPage from "./pages/AudioAnalysisPage"
 import TextAnalysisPage from "./pages/TextAnalysisPage"
 import LiveStreamingAnalysisPage from "./pages/LiveStreamingAnalysis"
+import Profile from "./pages/Profile"
 import AuthService from "./services/AuthService"
 
 // Protected Route wrapper component
@@ -76,6 +77,15 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <LiveStreamingAnalysisPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Profile />
           </ProtectedRoute>
         }
       />

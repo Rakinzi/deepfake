@@ -1,24 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Upload, 
-  Image, 
-  X, 
-  FileText, 
-  Shield, 
-  Check, 
-  AlertCircle,
-  Sparkles,
-  Loader,
-  Info,
-  UserCheck,
-  UserX,
-  Activity,
-  History
+import {
+  Upload, Image, X, FileText, Shield, Check, AlertCircle,
+  Sparkles, Loader, Info, UserCheck, UserX, Activity, History
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import ApiService from '../../services/ApiService';
 import AuthService from '../../services/AuthService';
 import { useNavigate } from 'react-router-dom';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
 
 const ImageAnalysisContent = () => {
   const [image, setImage] = useState(null);
@@ -30,453 +22,316 @@ const ImageAnalysisContent = () => {
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  
+
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
-  // Check authentication
   useEffect(() => {
-    if (!AuthService.isLoggedIn()) {
-      navigate('/');
-    }
+    if (!AuthService.isLoggedIn()) navigate('/');
   }, [navigate]);
 
-  // Load user history
-  const loadHistory = async () => {
-    try {
-      setIsLoadingHistory(true);
-      const response = await AuthService.getUserHistory();
-      if (response.success) {
-        setHistory(response.history);
-      }
-    } catch (err) {
-      console.error('Error loading history:', err);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
-
   useEffect(() => {
-    if (showHistory) {
-      loadHistory();
-    }
+    if (showHistory) loadHistory();
   }, [showHistory]);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      processFile(file);
-    }
+  const loadHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const response = await AuthService.getUserHistory();
+      if (response.success) setHistory(response.history);
+    } catch { } finally { setIsLoadingHistory(false); }
   };
 
   const processFile = (file) => {
-    if (!file.type.match('image.*')) {
-      setError('Please select an image file (JPEG, PNG, etc.)');
-      return;
-    }
-    
-    if (file.size > 5 * 1024 * 1024) {
-      setError('File size exceeds 5MB limit');
-      return;
-    }
-
+    if (!file.type.match('image.*')) { setError('Please select an image file'); return; }
+    if (file.size > 5 * 1024 * 1024) { setError('File size exceeds 5MB'); return; }
     const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagePreview(e.target.result);
-      setImage(file);
-      setError(null);
-      setAnalysisResults(null);
-    };
+    reader.onload = (e) => { setImagePreview(e.target.result); setImage(file); setError(null); setAnalysisResults(null); };
     reader.readAsDataURL(file);
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleUploadButtonClick = () => {
-    fileInputRef.current.click();
-  };
-
-  const clearImage = () => {
-    setImage(null);
-    setImagePreview(null);
-    setAnalysisResults(null);
-    setError(null);
   };
 
   const analyzeImage = async () => {
     if (!image) return;
-    
     setIsAnalyzing(true);
     setError(null);
-    
     try {
-      // Send image to backend for analysis
-      console.log("Sending image for analysis...");
       const response = await ApiService.analyzeFace(image);
-      
-      console.log("Analysis response:", response);
-      
       if (response.success) {
         setAnalysisResults(response);
-        // Refresh history after successful analysis
-        if (showHistory) {
-          loadHistory();
-        }
+        if (showHistory) loadHistory();
       } else {
-        setError(response.error || 'Analysis failed. Please try another image.');
+        setError(response.error || 'Analysis failed.');
       }
     } catch (err) {
-      console.error('Error analyzing image:', err);
-      setError(err.error || 'Server error. Please try again later.');
-      
-      // If unauthorized, redirect to login
-      if (err.status === 401) {
-        AuthService.logout();
-        navigate('/');
-      }
-    } finally {
-      setIsAnalyzing(false);
-    }
+      setError(err.error || 'Server error. Please try again.');
+      if (err.status === 401) { AuthService.logout(); navigate('/'); }
+    } finally { setIsAnalyzing(false); }
   };
 
-  // Get the dominant emotion from emotion object
   const getDominantEmotion = (emotions) => {
     if (!emotions) return null;
     return Object.entries(emotions).reduce((a, b) => a[1] > b[1] ? a : b)[0];
   };
 
-  // Format date for display
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
-  };
+  const formatDate = (d) => new Date(d).toLocaleString();
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
-          <div className="mb-4 sm:mb-0">
-            <h1 className="text-2xl font-bold text-gray-800">Face Analysis & Fake Detection</h1>
-            <p className="text-gray-500 mt-1">Upload a face image to analyze and check if it's real or AI-generated.</p>
-          </div>
-          <div className="flex space-x-3">
-            <button
+      {/* Header */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+            <div>
+              <CardTitle className="text-xl">Face Analysis & Fake Detection</CardTitle>
+              <CardDescription>Upload a face image to check if it's real or AI-generated.</CardDescription>
+            </div>
+            <Button
+              variant={showHistory ? 'default' : 'outline'}
+              size="sm"
               onClick={() => setShowHistory(!showHistory)}
-              className={`px-4 py-2 rounded-lg flex items-center transition-colors ${
-                showHistory ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className="flex items-center gap-2"
             >
-              <History className="w-5 h-5 mr-2" />
+              <History className="w-4 h-4" />
               {showHistory ? 'Hide History' : 'Show History'}
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
+        </CardHeader>
+      </Card>
 
-      {/* History Section */}
+      {/* History */}
       {showHistory && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.3 }}
-          className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
-        >
-          <div className="p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Analysis History</h2>
-            
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Analysis History</CardTitle>
+          </CardHeader>
+          <CardContent>
             {isLoadingHistory ? (
-              <div className="flex justify-center items-center h-20">
-                <Loader className="w-8 h-8 text-blue-500 animate-spin" />
+              <div className="flex justify-center py-8">
+                <Loader className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
             ) : history.length === 0 ? (
-              <div className="text-center p-8 text-gray-500">
-                <FileText className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                <p>No analysis history found. Analyze some images to see them here.</p>
+              <div className="text-center p-8 text-muted-foreground">
+                <FileText className="w-10 h-10 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm">No analysis history found.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {history.map((item) => (
-                  <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="h-32 bg-gray-100 flex items-center justify-center">
-                      <Image className="w-8 h-8 text-gray-400" />
+                  <div key={item.id} className="border border-border rounded-lg overflow-hidden">
+                    <div className="h-28 bg-muted flex items-center justify-center">
+                      <Image className="w-7 h-7 text-muted-foreground" />
                     </div>
                     <div className="p-3">
-                      <p className="text-sm font-medium text-gray-800">{item.original_filename}</p>
-                      <div className="flex items-center mt-1">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          item.is_real ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {item.is_real ? 'Authentic' : 'Fake/AI-Generated'}
-                        </span>
-                        <span className="text-xs text-gray-500 ml-auto">{formatDate(item.created_at)}</span>
+                      <p className="text-sm font-medium truncate">{item.original_filename}</p>
+                      <div className="flex items-center justify-between mt-1">
+                        <Badge variant={item.is_real ? 'outline' : 'destructive'} className="text-xs">
+                          {item.is_real ? 'Authentic' : 'Fake'}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">{formatDate(item.created_at)}</span>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        </motion.div>
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Upload section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Upload Image</h2>
-
+        {/* Upload */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Upload Image</CardTitle>
+          </CardHeader>
+          <CardContent>
             {!imagePreview ? (
               <div
-                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                  isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'
+                className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${
+                  isDragging ? 'border-foreground bg-muted/50' : 'border-border hover:border-foreground/50 hover:bg-muted/20'
                 }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={handleUploadButtonClick}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); }}
+                onClick={() => fileInputRef.current.click()}
               >
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept="image/*"
-                  className="hidden"
-                />
-                <Upload className="w-12 h-12 mx-auto text-gray-400" />
-                <p className="mt-2 text-gray-600">Drag and drop a face image here, or click to browse</p>
-                <p className="mt-1 text-sm text-gray-500">PNG, JPG, GIF up to 5MB</p>
+                <input type="file" ref={fileInputRef} onChange={(e) => { if (e.target.files[0]) processFile(e.target.files[0]); }} accept="image/*" className="hidden" />
+                <Upload className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground">Drag and drop a face image, or <span className="text-foreground font-medium">browse</span></p>
+                <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
               </div>
             ) : (
               <div className="relative">
-                <img 
-                  src={imagePreview} 
-                  alt="Preview" 
-                  className="w-full h-auto rounded-lg object-contain max-h-96"
-                />
-                <button
-                  onClick={clearImage}
-                  className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
+                <img src={imagePreview} alt="Preview" className="w-full h-auto rounded-lg object-contain max-h-80" />
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  onClick={() => { setImage(null); setImagePreview(null); setAnalysisResults(null); setError(null); }}
+                  className="absolute top-2 right-2 h-7 w-7"
                 >
-                  <X className="w-5 h-5 text-gray-600" />
-                </button>
+                  <X className="w-4 h-4" />
+                </Button>
               </div>
             )}
 
             {error && (
-              <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-lg flex items-start">
-                <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
-                <p className="text-sm">{error}</p>
+              <div className="mt-3 p-3 bg-destructive/10 text-destructive border border-destructive/20 rounded-md flex items-start gap-2 text-sm">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                {error}
               </div>
             )}
-            
-            {imagePreview && !analysisResults && !isAnalyzing && (
-              <button
-                onClick={analyzeImage}
-                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center"
-              >
-                <Sparkles className="w-5 h-5 mr-2" />
-                Analyze Face
-              </button>
-            )}
-            
-            {isAnalyzing && (
-              <div className="mt-4 w-full bg-blue-100 text-blue-700 font-medium py-3 px-4 rounded-lg flex items-center justify-center">
-                <Loader className="w-5 h-5 mr-2 animate-spin" />
-                Analyzing Image...
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Analysis results */}
-        <div className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden ${!analysisResults && !isAnalyzing ? 'lg:opacity-60' : ''}`}>
-          <div className="p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Analysis Results</h2>
-            
-            {!imagePreview && (
-              <div className="flex flex-col items-center justify-center h-64 text-center">
-                <Image className="w-12 h-12 text-gray-300" />
-                <p className="mt-2 text-gray-500">Upload an image to see analysis results</p>
-              </div>
-            )}
-            
             {imagePreview && !analysisResults && !isAnalyzing && (
-              <div className="flex flex-col items-center justify-center h-64 text-center">
-                <Info className="w-12 h-12 text-blue-300" />
-                <p className="mt-2 text-gray-500">Click "Analyze Face" to start analysis</p>
-              </div>
+              <Button onClick={analyzeImage} className="mt-4 w-full gap-2">
+                <Sparkles className="w-4 h-4" /> Analyze Face
+              </Button>
             )}
-            
+
             {isAnalyzing && (
-              <div className="flex flex-col items-center justify-center h-64">
-                <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                <p className="mt-4 text-blue-600 font-medium">Analyzing your image...</p>
-                <p className="text-sm text-gray-500 mt-2">This may take a few moments</p>
+              <div className="mt-4 w-full bg-muted text-muted-foreground py-3 px-4 rounded-md flex items-center justify-center gap-2 text-sm">
+                <Loader className="w-4 h-4 animate-spin" /> Analyzing image...
               </div>
             )}
-            
+          </CardContent>
+        </Card>
+
+        {/* Results */}
+        <Card className={!analysisResults && !isAnalyzing ? 'opacity-60' : ''}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Analysis Results</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!imagePreview && (
+              <div className="flex flex-col items-center justify-center h-56 text-center">
+                <Image className="w-10 h-10 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">Upload an image to see results</p>
+              </div>
+            )}
+
+            {imagePreview && !analysisResults && !isAnalyzing && (
+              <div className="flex flex-col items-center justify-center h-56 text-center">
+                <Info className="w-10 h-10 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">Click "Analyze Face" to start</p>
+              </div>
+            )}
+
+            {isAnalyzing && (
+              <div className="flex flex-col items-center justify-center h-56">
+                <div className="w-12 h-12 border-4 border-border border-t-foreground rounded-full animate-spin mb-4" />
+                <p className="font-medium text-sm">Analyzing your image...</p>
+                <p className="text-xs text-muted-foreground mt-1">This may take a few moments</p>
+              </div>
+            )}
+
             {analysisResults && (
-              <div className="space-y-6">
-                {/* Face detection result */}
-                {analysisResults.faces && analysisResults.faces.length > 0 && (
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <div className="flex items-center mb-3">
-                      <Shield className="w-5 h-5 text-blue-600 mr-2" />
-                      <h3 className="font-medium text-gray-800">Results</h3>
+              <div className="space-y-5">
+                {/* Main result */}
+                {analysisResults.faces?.length > 0 && (
+                  <div className="border border-border rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Shield className="w-4 h-4 text-foreground" />
+                      <h3 className="font-medium text-sm">Detection Result</h3>
                     </div>
-                    
-                    {analysisResults.faces.map((face, index) => (
-                      <div key={index} className="mb-4 last:mb-0">
+                    {analysisResults.faces.map((face, i) => (
+                      <div key={i}>
                         <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center space-x-2">
-                            {face.is_real ? (
-                              <>
-                                <UserCheck className="w-6 h-6 text-green-500" />
-                                <span className="font-medium text-green-600">Real Face Detected</span>
-                              </>
-                            ) : (
-                              <>
-                                <UserX className="w-6 h-6 text-red-500" />
-                                <span className="font-medium text-red-600">Fake/AI-Generated Face</span>
-                              </>
-                            )}
+                          <div className="flex items-center gap-2">
+                            {face.is_real
+                              ? <><UserCheck className="w-5 h-5" /><span className="font-semibold text-sm">Real Face</span></>
+                              : <><UserX className="w-5 h-5 text-destructive" /><span className="font-semibold text-sm text-destructive">Fake / AI-Generated</span></>
+                            }
                           </div>
-                          <div className="text-right">
-                            <div className="text-sm font-semibold">
-                              {face.is_real ? 
-                                `${(face.real_score * 100).toFixed(1)}% real` : 
-                                `${((1 - face.real_score) * 100).toFixed(1)}% synthetic`}
-                            </div>
-                          </div>
+                          <Badge variant={face.is_real ? 'default' : 'destructive'}>
+                            {face.is_real
+                              ? `${(face.real_score * 100).toFixed(1)}% real`
+                              : `${((1 - face.real_score) * 100).toFixed(1)}% synthetic`
+                            }
+                          </Badge>
                         </div>
-                        
-                        <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
                           <div
-                            className={face.is_real ? 'bg-green-500' : 'bg-red-500'}
-                            style={{ width: `${face.is_real ? face.real_score * 100 : (1 - face.real_score) * 100}%`, height: '100%' }}
-                          ></div>
+                            className={`h-full rounded-full transition-all ${face.is_real ? 'bg-emerald-500' : 'bg-red-500'}`}
+                            style={{ width: `${face.is_real ? face.real_score * 100 : (1 - face.real_score) * 100}%` }}
+                          />
                         </div>
-                        
-                        <div className="mt-2 text-xs text-gray-500">
-                          Detection confidence: {face.confidence ? `${(face.confidence * 100).toFixed(1)}%` : 'N/A'}
-                        </div>
+                        <p className="text-xs text-muted-foreground mt-1.5">
+                          Confidence: {face.confidence ? `${(face.confidence * 100).toFixed(1)}%` : 'N/A'}
+                        </p>
                       </div>
                     ))}
                   </div>
                 )}
-                
-                {/* Person attributes */}
+
+                {/* Attributes */}
                 {analysisResults.analysis && (
                   <div>
-                    <div className="flex items-center mb-3">
-                      <Activity className="w-5 h-5 text-blue-600 mr-2" />
-                      <h3 className="font-medium text-gray-800">Person Attributes</h3>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Activity className="w-4 h-4 text-foreground" />
+                      <h3 className="font-medium text-sm">Person Attributes</h3>
                     </div>
-                    
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-3 gap-2">
                       {analysisResults.analysis.age !== undefined && (
-                        <div className="bg-gray-50 p-3 rounded-lg text-center">
-                          <div className="text-sm text-gray-500">Age</div>
-                          <div className="text-xl font-semibold text-gray-800">{Math.round(analysisResults.analysis.age)}</div>
+                        <div className="bg-muted rounded-lg p-3 text-center">
+                          <p className="text-xs text-muted-foreground">Age</p>
+                          <p className="text-lg font-bold mt-0.5">{Math.round(analysisResults.analysis.age)}</p>
                         </div>
                       )}
-                      
-                      
                       {analysisResults.analysis.race && (
-                        <div className="bg-gray-50 p-3 rounded-lg text-center">
-                          <div className="text-sm text-gray-500">Ethnicity</div>
-                          <div className="text-xl font-semibold text-gray-800 capitalize">{analysisResults.analysis.race}</div>
+                        <div className="bg-muted rounded-lg p-3 text-center">
+                          <p className="text-xs text-muted-foreground">Ethnicity</p>
+                          <p className="text-sm font-semibold mt-0.5 capitalize">{analysisResults.analysis.race}</p>
                         </div>
                       )}
-                      
                       {analysisResults.analysis.emotion && (
-                        <div className="bg-gray-50 p-3 rounded-lg text-center">
-                          <div className="text-sm text-gray-500">Emotion</div>
-                          <div className="text-xl font-semibold text-gray-800 capitalize">{getDominantEmotion(analysisResults.analysis.emotion)}</div>
+                        <div className="bg-muted rounded-lg p-3 text-center">
+                          <p className="text-xs text-muted-foreground">Emotion</p>
+                          <p className="text-sm font-semibold mt-0.5 capitalize">{getDominantEmotion(analysisResults.analysis.emotion)}</p>
                         </div>
                       )}
                     </div>
-                    
-                    {/* Emotion details */}
+
                     {analysisResults.analysis.emotion && (
-                      <div className="mt-4 bg-gray-50 p-3 rounded-lg">
-                        <div className="text-sm text-gray-500 mb-2">Emotion Analysis</div>
-                        <div className="space-y-2">
-                          {Object.entries(analysisResults.analysis.emotion)
-                            .sort(([,a], [,b]) => b - a)
-                            .slice(0, 3)
-                            .map(([emotion, score]) => (
-                              <div key={emotion} className="flex items-center justify-between">
-                                <span className="text-sm capitalize">{emotion}</span>
-                                <div className="flex items-center">
-                                  <span className="text-xs mr-2">{(score * 100).toFixed(1)}%</span>
-                                  <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                    <div 
-                                      className="h-full bg-blue-600" 
-                                      style={{ width: `${score * 100}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
+                      <div className="mt-3 bg-muted/50 rounded-lg p-3">
+                        <p className="text-xs text-muted-foreground mb-2">Emotion Breakdown</p>
+                        <div className="space-y-1.5">
+                          {Object.entries(analysisResults.analysis.emotion).sort(([,a],[,b]) => b-a).slice(0,3).map(([emotion, score]) => (
+                            <div key={emotion} className="flex items-center gap-2">
+                              <span className="text-xs capitalize w-16 shrink-0">{emotion}</span>
+                              <Progress value={score * 100} className="flex-1 h-1.5" />
+                              <span className="text-xs text-muted-foreground w-10 text-right">{(score * 100).toFixed(1)}%</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
                   </div>
                 )}
-                
-                {/* Image quality */}
+
+                {/* Quality */}
                 {analysisResults.quality && (
                   <div>
-                    <div className="flex items-center mb-3">
-                      <Check className="w-5 h-5 text-blue-600 mr-2" />
-                      <h3 className="font-medium text-gray-800">Image Quality Metrics</h3>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Check className="w-4 h-4 text-foreground" />
+                      <h3 className="font-medium text-sm">Image Quality</h3>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                      <div className="bg-gray-50 rounded p-2">
-                        <div className="font-medium text-gray-800">Sharpness</div>
-                        <div className="text-gray-600 mt-1">{parseFloat(analysisResults.quality.sharpness).toFixed(1)}</div>
-                      </div>
-                      <div className="bg-gray-50 rounded p-2">
-                        <div className="font-medium text-gray-800">Brightness</div>
-                        <div className="text-gray-600 mt-1">{parseFloat(analysisResults.quality.brightness).toFixed(1)}</div>
-                      </div>
-                      <div className="bg-gray-50 rounded p-2">
-                        <div className="font-medium text-gray-800">Contrast</div>
-                        <div className="text-gray-600 mt-1">{parseFloat(analysisResults.quality.contrast).toFixed(1)}</div>
-                      </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['sharpness', 'brightness', 'contrast'].map((k) => (
+                        <div key={k} className="bg-muted rounded-lg p-2 text-center">
+                          <p className="text-xs text-muted-foreground capitalize">{k}</p>
+                          <p className="text-sm font-semibold mt-0.5">{parseFloat(analysisResults.quality[k]).toFixed(1)}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {/* Model information */}
                 {analysisResults.model_used && (
-                  <div className="mt-4 text-xs text-gray-500 italic">
-                    Analysis performed using: {analysisResults.model_used}
-                  </div>
+                  <p className="text-xs text-muted-foreground italic">Model: {analysisResults.model_used}</p>
                 )}
               </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

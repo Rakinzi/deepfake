@@ -1,81 +1,44 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Image, 
-  ShieldAlert, 
-  Check, 
-  Clock, 
-  ArrowUp, 
-  ArrowDown, 
-  ChevronRight, 
-  BarChart, 
-  FileWarning,
-  Users,
-  Cpu,
-  TrendingUp,
-  AlertTriangle,
-  Loader,
-  RefreshCw,
-  Video,
-  Info
+import {
+  Image, ShieldAlert, Check, Clock, ArrowUp, ArrowDown, ChevronRight,
+  BarChart, FileWarning, Cpu, AlertTriangle, Loader, RefreshCw, Video, Users
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DashboardService from '../../services/DashboardService';
 import AuthService from '../../services/AuthService';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
 
 const DashboardContent = () => {
-  const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState([]);
   const [recentDetections, setRecentDetections] = useState([]);
   const [chartData, setChartData] = useState(null);
   const [recentAnalyses, setRecentAnalyses] = useState([]);
-  
-  // Video stats state
   const [videoStats, setVideoStats] = useState([]);
   const [videoChartData, setVideoChartData] = useState(null);
   const [recentVideos, setRecentVideos] = useState([]);
   const [recentVideoDetections, setRecentVideoDetections] = useState([]);
-  
+
   const navigate = useNavigate();
 
-  // Check authentication and fetch data
   useEffect(() => {
-    // Verify authentication
-    if (!AuthService.isLoggedIn()) {
-      navigate('/');
-      return;
-    }
-
-    // Load dashboard data
+    if (!AuthService.isLoggedIn()) { navigate('/'); return; }
     fetchDashboardData();
     fetchVideoDashboardData();
-    
-    // Load recent analyses if on recent scans tab
-    if (activeTab === 'recent scans') {
-      fetchRecentAnalyses();
-      fetchRecentVideos();
-    }
   }, [navigate]);
 
-  // Reload data when tab changes
-  useEffect(() => {
-    if (activeTab === 'recent scans') {
-      fetchRecentAnalyses();
-      fetchRecentVideos();
-    }
-  }, [activeTab]);
-
-  // Fetch dashboard statistics and data
   const fetchDashboardData = async () => {
     setIsLoading(true);
     setError(null);
-    
     try {
       const response = await DashboardService.getDashboardStats();
-      
       if (response.success) {
-        // Format stats as array for rendering
         const statsArray = Object.keys(response.stats).map(key => ({
           id: key,
           title: response.stats[key].title,
@@ -83,464 +46,240 @@ const DashboardContent = () => {
           change: response.stats[key].change,
           isPositive: response.stats[key].isPositive,
           icon: getIconForStat(key),
-          color: getColorForStat(key)
         }));
-        
         setStats(statsArray);
         setRecentDetections(response.recent_detections || []);
         setChartData(response.chart_data);
       } else {
         setError('Failed to load dashboard data');
-        setStats([]);
       }
     } catch (err) {
-      console.error('Error fetching dashboard data:', err);
       setError(err.error || 'Failed to load dashboard data');
-      setStats([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fetch video dashboard statistics
   const fetchVideoDashboardData = async () => {
-    setIsLoading(true);
-    setError(null);
-    
     try {
       const response = await DashboardService.getVideoDashboardStats();
-      
       if (response.success) {
-        // Format stats as array for rendering
-        const videoStatsArray = Object.keys(response.stats).map(key => ({
+        const arr = Object.keys(response.stats).map(key => ({
           id: key,
           title: response.stats[key].title,
           value: response.stats[key].value,
           change: response.stats[key].change,
           isPositive: response.stats[key].isPositive,
           icon: getIconForVideoStat(key),
-          color: getColorForVideoStat(key)
         }));
-        
-        setVideoStats(videoStatsArray);
+        setVideoStats(arr);
         setRecentVideoDetections(response.recent_detections || []);
         setVideoChartData(response.chart_data);
-      } else {
-        setVideoStats([]);
       }
     } catch (err) {
-      console.error('Error fetching video dashboard data:', err);
       setVideoStats([]);
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  // Fetch recent analyses
   const fetchRecentAnalyses = async () => {
     try {
       const response = await DashboardService.getRecentAnalyses();
-      
-      if (response.success) {
-        setRecentAnalyses(response.analyses || []);
-      } else {
-        setRecentAnalyses([]);
-      }
-    } catch (err) {
-      console.error('Error fetching recent analyses:', err);
-      setRecentAnalyses([]);
-    }
+      if (response.success) setRecentAnalyses(response.analyses || []);
+    } catch { setRecentAnalyses([]); }
   };
 
-  // Fetch recent videos
   const fetchRecentVideos = async () => {
     try {
       const response = await DashboardService.getRecentVideos();
-      
-      if (response.success) {
-        setRecentVideos(response.videos || []);
-      } else {
-        setRecentVideos([]);
-      }
-    } catch (err) {
-      console.error('Error fetching recent videos:', err);
-      setRecentVideos([]);
-    }
+      if (response.success) setRecentVideos(response.videos || []);
+    } catch { setRecentVideos([]); }
   };
 
-  // Helper functions for icons and colors
-  const getIconForStat = (statId) => {
-    switch (statId) {
-      case 'scanned': return Image;
-      case 'detected': return ShieldAlert;
-      case 'accuracy': return Check;
-      case 'processing': return Clock;
-      default: return Image;
-    }
+  const handleRefresh = () => {
+    fetchDashboardData();
+    fetchVideoDashboardData();
   };
 
-  const getColorForStat = (statId) => {
-    switch (statId) {
-      case 'scanned': return 'bg-blue-500';
-      case 'detected': return 'bg-red-500';
-      case 'accuracy': return 'bg-green-500';
-      case 'processing': return 'bg-purple-500';
-      default: return 'bg-blue-500';
-    }
-  };
-  
-  // Helper functions for icons and colors for video stats
-  const getIconForVideoStat = (statId) => {
-    switch (statId) {
-      case 'videos_analyzed': return Video;
-      case 'fake_videos': return ShieldAlert;
-      case 'avg_duration': return Clock;
-      default: return Video;
-    }
-  };
+  const getIconForStat = (id) => ({ scanned: Image, detected: ShieldAlert, accuracy: Check, processing: Clock }[id] ?? Image);
+  const getIconForVideoStat = (id) => ({ videos_analyzed: Video, fake_videos: ShieldAlert, avg_duration: Clock }[id] ?? Video);
 
-  const getColorForVideoStat = (statId) => {
-    switch (statId) {
-      case 'videos_analyzed': return 'bg-purple-500';
-      case 'fake_videos': return 'bg-red-500';
-      case 'avg_duration': return 'bg-cyan-500';
-      default: return 'bg-purple-500';
-    }
-  };
+  const isEmptyDashboard = !isLoading && stats.length === 1 && stats[0].id === 'scanned' && stats[0].value === '0';
 
-  // Fake image detection techniques (educational content)
   const detectionMethods = [
     { name: 'Metadata Analysis', accuracy: 92, description: 'Examines EXIF data for inconsistencies' },
     { name: 'Noise Pattern Analysis', accuracy: 95, description: 'Analyzes noise patterns that differ in AI-generated images' },
     { name: 'Facial Inconsistency', accuracy: 97, description: 'Detects unnatural features in faces' },
-    { name: 'Color Inconsistency', accuracy: 94, description: 'Identifies unusual color patterns and gradients' }
+    { name: 'Color Inconsistency', accuracy: 94, description: 'Identifies unusual color patterns and gradients' },
+    { name: 'Temporal Consistency', accuracy: 94, description: 'Analyzes consistency between frames' },
+    { name: 'Face Tracking Artifacts', accuracy: 96, description: 'Detects inconsistencies in facial landmarks' },
+    { name: 'Compression Artifacts', accuracy: 91, description: 'Identifies inconsistent compression patterns' },
+    { name: 'Lip Sync Evaluation', accuracy: 93, description: 'Detects misalignment between lip movements and speech' },
   ];
 
-  // Determine the dominant analysis result type for chart visualization
-  const getDominantResult = () => {
-    if (!chartData) return { authentic: 0, aiGenerated: 0 };
-    
-    return {
-      authentic: chartData.authentic.percent,
-      aiGenerated: chartData.ai_generated.percent
-    };
-  };
-  
-  // Determine the dominant result type for video chart visualization
-  const getVideoDominantResult = () => {
-    if (!videoChartData) return { authentic: 0, manipulated: 0 };
-    
-    return {
-      authentic: videoChartData.authentic.percent,
-      manipulated: videoChartData.manipulated.percent
-    };
-  };
-
-  // Check if we have any analysis data
-  const hasAnalysisData = () => {
-    return stats.some(stat => stat.id === 'scanned' && parseInt(stat.value) > 0);
-  };
-
-  // Get result type for recent analyses
-  const getResultType = (isReal, spoofingType) => {
-    if (isReal) return 'Authentic';
-    if (spoofingType === 'AI-generated') return 'AI Generated';
-    return spoofingType || 'Modified';
-  };
-
-  // Format date for display
   const formatTimeAgo = (dateString) => {
     if (!dateString) return 'Unknown';
-    
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHour = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHour / 24);
-    
-    if (diffDay > 0) return `${diffDay} day${diffDay > 1 ? 's' : ''} ago`;
-    if (diffHour > 0) return `${diffHour} hour${diffHour > 1 ? 's' : ''} ago`;
-    if (diffMin > 0) return `${diffMin} minute${diffMin > 1 ? 's' : ''} ago`;
+    const diff = Date.now() - new Date(dateString);
+    const d = Math.floor(diff / 86400000), h = Math.floor(diff / 3600000), m = Math.floor(diff / 60000);
+    if (d > 0) return `${d}d ago`;
+    if (h > 0) return `${h}h ago`;
+    if (m > 0) return `${m}m ago`;
     return 'Just now';
   };
 
-  // Refresh dashboard data
-  const handleRefresh = () => {
-    fetchDashboardData();
-    fetchVideoDashboardData();
-    if (activeTab === 'recent scans') {
-      fetchRecentAnalyses();
-      fetchRecentVideos();
-    }
+  const ResultBadge = ({ result, isReal }) => {
+    const isAuthentic = result === 'Authentic' || isReal;
+    return (
+      <Badge variant={isAuthentic ? 'default' : 'destructive'} className="text-xs">
+        {result ?? (isReal ? 'Authentic' : 'Fake')}
+      </Badge>
+    );
   };
-
-  // Check if this is an empty dashboard (no scans yet)
-  const isEmptyDashboard = !isLoading && stats.length === 1 && stats[0].id === 'scanned' && stats[0].value === '0';
 
   return (
     <div className="space-y-6">
-      {/* Welcome section */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">Media Verification Dashboard</h1>
-            <p className="text-gray-500 mt-1">Monitor and analyze potentially manipulated or AI-generated images and videos.</p>
+      {/* Header */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle className="text-xl">Media Verification Dashboard</CardTitle>
+              <CardDescription className="mt-1">Monitor and analyze potentially manipulated or AI-generated media.</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading} className="h-8 w-8">
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button asChild size="sm">
+                <a href="/image-analysis" className="flex items-center gap-1">
+                  Analyze Media <ChevronRight className="w-4 h-4" />
+                </a>
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={handleRefresh}
-              className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full transition-colors"
-              disabled={isLoading}
-              title="Refresh dashboard data"
-            >
-              <RefreshCw className="w-5 h-5" />
-            </button>
-            <a 
-              href="/image-analysis"
-              className="hidden sm:flex px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md items-center hover:bg-blue-700 transition-colors"
-            >
-              <span>Analyze New Media</span>
-              <ChevronRight className="ml-1 w-4 h-4" />
-            </a>
-          </div>
-        </div>
-      </div>
+        </CardHeader>
+      </Card>
 
-      {/* Error message if needed */}
       {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg border border-red-100 flex items-start">
-          <AlertTriangle className="w-5 h-5 mr-2 mt-0.5" />
+        <div className="bg-destructive/10 text-destructive border border-destructive/20 p-4 rounded-md flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           <div>
-            <p className="font-medium">Error loading dashboard data</p>
-            <p className="text-sm">{error}</p>
+            <p className="font-medium text-sm">Error loading dashboard data</p>
+            <p className="text-xs mt-0.5">{error}</p>
           </div>
         </div>
       )}
 
       {/* Stats grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {isLoading ? (
-          // Loading skeletons for stats
-          Array(4).fill(0).map((_, index) => (
-            <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-pulse">
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-gray-200"></div>
-                  <div className="w-16 h-5 rounded bg-gray-200"></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {isLoading ? Array(4).fill(0).map((_, i) => (
+          <Card key={i} className="animate-pulse">
+            <CardContent className="p-6">
+              <div className="w-10 h-10 rounded-lg bg-muted mb-4" />
+              <div className="w-24 h-4 bg-muted rounded mb-2" />
+              <div className="w-16 h-7 bg-muted rounded" />
+            </CardContent>
+          </Card>
+        )) : isEmptyDashboard ? (
+          <Card className="col-span-full">
+            <CardContent className="p-12 text-center">
+              <Image className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+              <h3 className="font-semibold mb-1">No analysis data yet</h3>
+              <p className="text-muted-foreground text-sm mb-4">Start analyzing images or videos to see your statistics</p>
+              <div className="flex justify-center gap-3">
+                <Button asChild size="sm"><a href="/image-analysis">Analyze Image</a></Button>
+                <Button asChild variant="outline" size="sm"><a href="/video-analysis">Analyze Video</a></Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : stats.map((stat) => (
+          <Card key={stat.id} className="hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex justify-between items-start mb-3">
+                <div className="p-2 rounded-lg bg-secondary">
+                  <stat.icon className="w-5 h-5 text-foreground" />
                 </div>
-                <div className="w-32 h-5 rounded bg-gray-200 mb-2"></div>
-                <div className="w-20 h-8 rounded bg-gray-300"></div>
+                <span className={`text-xs font-semibold flex items-center gap-0.5 ${stat.isPositive ? 'text-foreground' : 'text-destructive'}`}>
+                  {stat.isPositive ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+                  {stat.change}
+                </span>
               </div>
-              <div className="h-1 w-full bg-gray-100"></div>
-            </div>
-          ))
-        ) : isEmptyDashboard ? (
-          // Empty state with CTA
-          <div className="col-span-full bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-            <Image className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-            <h3 className="text-lg font-medium text-gray-700 mb-2">No analysis data yet</h3>
-            <p className="text-gray-500 mb-4">Start analyzing images or videos to see your statistics here</p>
-            <div className="flex justify-center space-x-4">
-              <a 
-                href="/image-analysis"
-                className="inline-flex px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md items-center hover:bg-blue-700 transition-colors"
-              >
-                <span>Analyze Image</span>
-                <ChevronRight className="ml-1 w-4 h-4" />
-              </a>
-              <a 
-                href="/video-analysis"
-                className="inline-flex px-4 py-2 bg-purple-600 text-white rounded-lg shadow-md items-center hover:bg-purple-700 transition-colors"
-              >
-                <span>Analyze Video</span>
-                <ChevronRight className="ml-1 w-4 h-4" />
-              </a>
-            </div>
-          </div>
-        ) : (
-          // Actual stats from the API
-          stats.map((stat) => (
-            <div
-              key={stat.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
-            >
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className={`p-3 rounded-lg ${stat.color}`}>
-                    <stat.icon className="w-6 h-6 text-white" />
-                  </div>
-                  <span className={`text-sm font-semibold flex items-center ${
-                    stat.isPositive ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {stat.isPositive ? <ArrowUp className="w-4 h-4 mr-1" /> : <ArrowDown className="w-4 h-4 mr-1" />}
-                    {stat.change}
-                  </span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-700">{stat.title}</h3>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
-              </div>
-              <div className="h-1 w-full bg-gray-100">
-                <div 
-                  className={`h-full ${stat.color}`}
-                  style={{ width: `${Math.max(30, Math.min(100, parseFloat(stat.value) || 75))}%` }}
-                />
-              </div>
-            </div>
-          ))
-        )}
+              <p className="text-sm text-muted-foreground">{stat.title}</p>
+              <p className="text-2xl font-bold mt-1">{stat.value}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* Tabs and content */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="border-b border-gray-200">
-          <div className="flex">
-            {['overview', 'detection methods', 'recent scans'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-        
-        <div className="p-6">
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
-            isLoading ? (
-              // Loading state for overview tab
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-pulse">
-                <div className="lg:col-span-2 bg-gray-50 rounded-lg p-6 h-64">
-                  <div className="w-32 h-6 bg-gray-200 rounded mx-auto mb-4"></div>
-                  <div className="w-full h-40 bg-gray-200 rounded"></div>
+      {/* Tabs */}
+      <Card>
+        <CardContent className="p-6">
+          <Tabs defaultValue="overview" onValueChange={(val) => { if (val === 'recent scans') { fetchRecentAnalyses(); fetchRecentVideos(); } }}>
+            <TabsList className="mb-6">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="methods">Detection Methods</TabsTrigger>
+              <TabsTrigger value="recent scans">Recent Scans</TabsTrigger>
+            </TabsList>
+
+            {/* Overview Tab */}
+            <TabsContent value="overview">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-48">
+                  <Loader className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
-                <div>
-                  <div className="w-40 h-6 bg-gray-200 rounded mb-6"></div>
-                  <div className="space-y-4">
-                    {Array(3).fill(0).map((_, i) => (
-                      <div key={i} className="flex items-start">
-                        <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0"></div>
-                        <div className="ml-3 w-full">
-                          <div className="w-3/4 h-4 bg-gray-200 rounded mb-2"></div>
-                          <div className="flex items-center">
-                            <div className="w-16 h-4 bg-gray-200 rounded"></div>
-                            <div className="ml-auto w-20 h-4 bg-gray-200 rounded"></div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              ) : !chartData || (!chartData.authentic?.count && !chartData.ai_generated?.count) ? (
+                <div className="text-center py-12">
+                  <BarChart className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+                  <p className="text-muted-foreground">No analysis data yet. Start by analyzing some images.</p>
                 </div>
-              </div>
-            ) : isEmptyDashboard ? (
-              // Empty state for overview
-              <div className="text-center py-8">
-                <Image className="w-16 h-16 mx-auto text-gray-200 mb-4" />
-                <h3 className="text-lg font-medium text-gray-700 mb-2">No data to display yet</h3>
-                <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                  Your dashboard will show statistics and insights once you start analyzing images and videos.
-                </p>
-                <div className="flex justify-center space-x-4">
-                  <a 
-                    href="/image-analysis"
-                    className="inline-flex px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md items-center hover:bg-blue-700 transition-colors"
-                  >
-                    Analyze Image
-                  </a>
-                  <a 
-                    href="/video-analysis"
-                    className="inline-flex px-4 py-2 bg-purple-600 text-white rounded-lg shadow-md items-center hover:bg-purple-700 transition-colors"
-                  >
-                    Analyze Video
-                  </a>
-                </div>
-              </div>
-            ) : (
-              <div>
+              ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Detection chart */}
-                  <div className="lg:col-span-2 bg-gray-50 rounded-lg p-6 h-64 flex flex-col items-center justify-center">
-                    <div className="text-center mb-4">
-                      <BarChart className="w-12 h-12 mx-auto text-gray-400" />
-                      <p className="mt-2 text-gray-500 font-medium">Image Detection Results (Last 30 Days)</p>
+                  {/* Chart */}
+                  <div className="lg:col-span-2 bg-muted/30 rounded-lg p-6">
+                    <p className="text-sm font-medium mb-1">Image Detection Results</p>
+                    <p className="text-xs text-muted-foreground mb-6">Last 30 days</p>
+                    <div className="flex items-end justify-around h-40 gap-8">
+                      {[
+                        { label: 'Authentic', count: chartData.authentic.count, pct: chartData.authentic.percent, barClass: 'bg-foreground', dotClass: 'bg-foreground' },
+                        { label: 'AI Generated', count: chartData.ai_generated.count, pct: chartData.ai_generated.percent, barClass: 'bg-zinc-400', dotClass: 'bg-zinc-400' },
+                      ].map(({ label, count, pct, barClass, dotClass }) => (
+                        <div key={label} className="flex flex-col items-center gap-2">
+                          <span className="text-sm font-bold">{Math.round(pct)}%</span>
+                          <div
+                            className={`w-16 ${barClass} rounded-t-sm transition-all`}
+                            style={{ height: `${Math.max(8, pct / 100 * 120)}px` }}
+                          />
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <div className={`w-2.5 h-2.5 rounded-sm ${dotClass}`} />
+                            <span className="text-xs font-medium">{label}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">{count} images</span>
+                        </div>
+                      ))}
                     </div>
-                    
-                    {chartData && (chartData.authentic.count > 0 || chartData.ai_generated.count > 0) ? (
-                      <div className="w-full max-w-md flex justify-around px-6">
-                        <div className="flex flex-col items-center">
-                          <div className="w-8 h-40 bg-green-500 rounded-t-sm" style={{ 
-                            height: `${Math.max(4, getDominantResult().authentic / 100 * 60)}px` 
-                          }}></div>
-                          <span className="text-xs mt-1 text-gray-500">Authentic</span>
-                          <span className="text-xs font-bold text-gray-700">{Math.round(getDominantResult().authentic)}%</span>
-                          <span className="text-xs text-gray-500 mt-1">{chartData.authentic.count} images</span>
-                        </div>
-                        <div className="flex flex-col items-center">
-                          <div className="w-8 h-40 bg-red-500 rounded-t-sm" style={{ 
-                            height: `${Math.max(4, getDominantResult().aiGenerated / 100 * 60)}px` 
-                          }}></div>
-                          <span className="text-xs mt-1 text-gray-500">AI Generated</span>
-                          <span className="text-xs font-bold text-gray-700">{Math.round(getDominantResult().aiGenerated)}%</span>
-                          <span className="text-xs text-gray-500 mt-1">{chartData.ai_generated.count} images</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center text-gray-500">
-                        <p>No analysis data available</p>
-                        <p className="text-sm mt-1">Analyze some images to see statistics</p>
-                      </div>
-                    )}
                   </div>
 
                   {/* Recent detections */}
                   <div>
-                    <h3 className="text-lg font-semibold mb-4 text-gray-800">Recent Image Detections</h3>
+                    <h3 className="text-sm font-semibold mb-4">Recent Detections</h3>
                     {recentDetections.length === 0 ? (
-                      <div className="text-center p-6 bg-gray-50 rounded-lg">
-                        <FileWarning className="w-10 h-10 mx-auto text-gray-300 mb-2" />
-                        <p className="text-gray-500">No recent detections found</p>
-                        <p className="text-sm text-gray-400 mt-1">Start analyzing images to see your history</p>
-                      </div>
+                      <p className="text-sm text-muted-foreground">No recent detections</p>
                     ) : (
-                      <div className="space-y-4">
-                        {recentDetections.map((detection, index) => (
-                          <div
-                            key={index}
-                            className="flex items-start"
-                          >
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                              detection.result === 'Authentic' ? 'bg-green-100' : 
-                              (detection.result === 'AI Generated' || detection.result === 'Deepfake') ? 'bg-red-100' : 'bg-yellow-100'
-                            }`}>
-                              {detection.result === 'Authentic' ? (
-                                <Check className={`w-5 h-5 text-green-600`} />
-                              ) : detection.result === 'AI Generated' || detection.result === 'Deepfake' ? (
-                                <AlertTriangle className={`w-5 h-5 text-red-600`} />
-                              ) : (
-                                <FileWarning className={`w-5 h-5 text-yellow-600`} />
-                              )}
+                      <div className="space-y-3">
+                        {recentDetections.map((d, i) => (
+                          <div key={i} className="flex items-start gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${d.result === 'Authentic' ? 'bg-secondary' : 'bg-destructive/10'}`}>
+                              {d.result === 'Authentic'
+                                ? <Check className="w-4 h-4" />
+                                : <AlertTriangle className="w-4 h-4 text-destructive" />
+                              }
                             </div>
-                            <div className="ml-3">
-                              <p className="text-sm text-gray-800 font-medium">
-                                {detection.filename}
-                              </p>
-                              <div className="flex items-center mt-1">
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                  detection.result === 'Authentic' ? 'bg-green-100 text-green-800' : 
-                                  (detection.result === 'AI Generated' || detection.result === 'Deepfake') ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                  {detection.result}
-                                </span>
-                                <span className="text-xs text-gray-500 ml-2">{detection.confidence}</span>
-                                <span className="text-xs text-gray-400 ml-auto">{detection.time}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{d.filename}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <Badge variant={d.result === 'Authentic' ? 'outline' : 'destructive'} className="text-xs px-1.5 py-0">
+                                  {d.result}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground ml-auto">{d.time}</span>
                               </div>
                             </div>
                           </div>
@@ -549,294 +288,102 @@ const DashboardContent = () => {
                     )}
                   </div>
                 </div>
-                
-                {/* Video Stats Grid */}
-                {videoStats.length > 0 && (
-                  <div className="mt-8">
-                    <h2 className="text-xl font-semibold text-gray-800 mb-4">Video Analysis Statistics</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {videoStats.map((stat) => (
-                        <div
-                          key={stat.id}
-                          className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
-                        >
-                          <div className="p-6">
-                            <div className="flex justify-between items-start mb-4">
-                              <div className={`p-3 rounded-lg ${stat.color}`}>
-                                <stat.icon className="w-6 h-6 text-white" />
-                              </div>
-                              <span className={`text-sm font-semibold flex items-center ${
-                                stat.isPositive ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {stat.isPositive ? <ArrowUp className="w-4 h-4 mr-1" /> : <ArrowDown className="w-4 h-4 mr-1" />}
-                                {stat.change}
-                              </span>
-                            </div>
-                            <h3 className="text-lg font-semibold text-gray-700">{stat.title}</h3>
-                            <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
-                          </div>
-                          <div className="h-1 w-full bg-gray-100">
-                            <div 
-                              className={`h-full ${stat.color}`}
-                              style={{ width: `${Math.max(30, Math.min(100, parseFloat(stat.value) || 75))}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    
-                    {/* Video Chart */}
-                    {videoChartData && (videoChartData.authentic.count > 0 || videoChartData.manipulated.count > 0) && (
-                      <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Video Detection Results (Last 30 Days)</h3>
-                        <div className="max-w-md mx-auto flex justify-around items-end h-64">
-                          <div className="flex flex-col items-center">
-                            <div className="w-24 bg-green-500 rounded-t-sm" style={{ 
-                              height: `${Math.max(4, getVideoDominantResult().authentic / 100 * 180)}px` 
-                            }}></div>
-                            <span className="text-sm mt-2 text-gray-600">Authentic</span>
-                            <span className="text-sm font-bold text-gray-700">{Math.round(getVideoDominantResult().authentic)}%</span>
-                            <span className="text-xs text-gray-500 mt-1">{videoChartData.authentic.count} videos</span>
-                          </div>
-                          <div className="flex flex-col items-center">
-                            <div className="w-24 bg-red-500 rounded-t-sm" style={{ 
-                              height: `${Math.max(4, getVideoDominantResult().manipulated / 100 * 180)}px` 
-                            }}></div>
-                            <span className="text-sm mt-2 text-gray-600">Manipulated</span>
-                            <span className="text-sm font-bold text-gray-700">{Math.round(getVideoDominantResult().manipulated)}%</span>
-                            <span className="text-xs text-gray-500 mt-1">{videoChartData.manipulated.count} videos</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Recent Video Detections */}
-                    {recentVideoDetections.length > 0 && (
-                      <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Recent Video Detections</h3>
-                        <div className="space-y-4">
-                          {recentVideoDetections.map((detection, index) => (
-                            <div
-                              key={index}
-                              className="flex items-start border-b border-gray-100 pb-4 last:border-b-0 last:pb-0"
-                            >
-                              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                detection.result === 'Authentic' ? 'bg-green-100' : 'bg-red-100'
-                              }`}>
-                                {detection.result === 'Authentic' ? (
-                                  <Check className={`w-5 h-5 text-green-600`} />
-                                ) : (
-                                  <AlertTriangle className={`w-5 h-5 text-red-600`} />
-                                )}
-                              </div>
-                              <div className="ml-3 flex-1">
-                                <div className="flex justify-between">
-                                  <p className="text-sm text-gray-800 font-medium">
-                                    {detection.filename}
-                                  </p>
-                                  <span className="text-xs text-gray-400">{detection.time}</span>
-                                </div>
-                                <div className="flex items-center mt-1">
-                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                    detection.result === 'Authentic' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                  }`}>
-                                    {detection.result}
-                                  </span>
-                                  <span className="text-xs text-gray-500 ml-2">{detection.confidence}</span>
-                                  <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full ml-2">
-                                    {detection.duration}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          )}
+              )}
+            </TabsContent>
 
-          {/* Detection Methods Tab */}
-          {activeTab === 'detection methods' && (
-            <div className="space-y-6">
-              <div className="bg-blue-50 rounded-lg p-4 text-blue-700 mb-4 flex items-start">
-                <Cpu className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" />
-                <p className="text-sm">Our system uses multiple detection methods to identify manipulated, AI-generated, or deepfake content with high accuracy.</p>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {detectionMethods.map((method, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+            {/* Detection Methods Tab */}
+            <TabsContent value="methods">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {detectionMethods.map((m) => (
+                  <div key={m.name} className="border border-border rounded-lg p-4">
                     <div className="flex justify-between items-center mb-2">
-                      <h4 className="font-medium text-gray-800">{method.name}</h4>
-                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                        {method.accuracy}% accuracy
-                      </span>
+                      <h4 className="font-medium text-sm">{m.name}</h4>
+                      <Badge variant="outline" className="text-xs">{m.accuracy}% accuracy</Badge>
                     </div>
-                    <p className="text-sm text-gray-600">{method.description}</p>
+                    <p className="text-xs text-muted-foreground">{m.description}</p>
                   </div>
                 ))}
               </div>
-              
-              {/* Video Detection Methods */}
-              <h3 className="text-lg font-semibold text-gray-800 mt-8 mb-4">Video Deepfake Detection Techniques</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium text-gray-800">Temporal Consistency Analysis</h4>
-                    <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
-                      94% accuracy
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600">Analyzes consistency between frames to detect unnatural transitions or manipulation artifacts</p>
-                </div>
-                
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium text-gray-800">Face Tracking Artifacts</h4>
-                    <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
-                      96% accuracy
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600">Detects inconsistencies in facial landmarks, expressions, and movements between frames</p>
-                </div>
-                
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium text-gray-800">Compression Artifact Analysis</h4>
-                    <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
-                      91% accuracy
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600">Identifies inconsistent compression patterns that occur when synthesized content is inserted into real video</p>
-                </div>
-                
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium text-gray-800">Lip Sync Evaluation</h4>
-                    <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
-                      93% accuracy
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600">Detects misalignment between lip movements and speech, common in synthetic or manipulated videos</p>
-                </div>
-              </div>
-            </div>
-          )}
+            </TabsContent>
 
-          {/* Recent Scans Tab */}
-          {activeTab === 'recent scans' && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-medium text-gray-800">Recently Analyzed Images</h3>
-                {recentAnalyses.length > 0 && (
-                  <button 
-                    onClick={() => navigate('/profile')}
-                    className="text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    View All
-                  </button>
-                )}
-              </div>
-              
-              {recentAnalyses.length === 0 ? (
-                <div className="text-center p-10 bg-gray-50 rounded-lg">
-                  <Image className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                  <p className="text-gray-600 font-medium">No images analyzed yet</p>
-                  <p className="text-gray-500 mt-1">Start analyzing images to see them here</p>
-                  <a 
-                    href="/image-analysis"
-                    className="inline-block mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Analyze First Image
-                  </a>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {recentAnalyses.map((item) => (
-                    <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                      <div className="h-36 bg-gray-100 relative flex items-center justify-center">
-                        <Image className="w-10 h-10 text-gray-300" />
-                        <div className="absolute top-2 right-2">
-                          <span className={`${
-                            item.is_real ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          } text-xs px-2 py-1 rounded-full`}>
-                            {getResultType(item.is_real, item.spoofing_type)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="p-3">
-                        <p className="text-sm font-medium text-gray-800">{item.original_filename}</p>
-                        <div className="flex justify-between items-center mt-1">
-                          <span className="text-xs text-gray-500">Scanned {formatTimeAgo(item.created_at)}</span>
-                          <span className="text-xs font-medium text-gray-700">
-                            Confidence: {Math.round(item.is_real ? item.real_score * 100 : (1 - item.real_score) * 100)}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* Recent Videos Section */}
-              <div className="mt-8">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-medium text-gray-800">Recently Analyzed Videos</h3>
-                  {recentVideos.length > 0 && (
-                    <button 
-                      onClick={() => navigate('/profile')}
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      View All
-                    </button>
+            {/* Recent Scans Tab */}
+            <TabsContent value="recent scans">
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-semibold">Recently Analyzed Images</h3>
+                  {recentAnalyses.length > 0 && (
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/profile')} className="text-xs h-7">View All</Button>
                   )}
                 </div>
-                
-                {recentVideos.length === 0 ? (
-                  <div className="text-center p-10 bg-gray-50 rounded-lg">
-                    <Video className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                    <p className="text-gray-600 font-medium">No videos analyzed yet</p>
-                    <p className="text-gray-500 mt-1">Start analyzing videos to see them here</p>
-                    <a 
-                      href="/video-analysis"
-                      className="inline-block mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                    >
-                      Analyze First Video
-                    </a>
+                {recentAnalyses.length === 0 ? (
+                  <div className="text-center p-10 bg-muted/30 rounded-lg">
+                    <Image className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground text-sm">No images analyzed yet</p>
+                    <Button asChild size="sm" className="mt-3"><a href="/image-analysis">Analyze First Image</a></Button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {recentVideos.map((item) => (
-                      <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="h-36 bg-gray-100 relative flex items-center justify-center">
-                          <Video className="w-10 h-10 text-gray-300" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {recentAnalyses.map((item) => (
+                      <div key={item.id} className="border border-border rounded-lg overflow-hidden">
+                        <div className="h-32 bg-muted flex items-center justify-center relative">
+                          <Image className="w-8 h-8 text-muted-foreground" />
                           <div className="absolute top-2 right-2">
-                            <span className={`${
-                              item.is_real ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                            } text-xs px-2 py-1 rounded-full`}>
-                              {item.is_real ? 'Authentic' : (item.manipulation_type || 'Manipulated')}
+                            <Badge variant={item.is_real ? 'default' : 'destructive'} className="text-xs">
+                              {item.is_real ? 'Authentic' : 'Fake'}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="p-3">
+                          <p className="text-sm font-medium truncate">{item.original_filename}</p>
+                          <div className="flex justify-between items-center mt-1">
+                            <span className="text-xs text-muted-foreground">{formatTimeAgo(item.created_at)}</span>
+                            <span className="text-xs font-medium">
+                              {Math.round(item.is_real ? item.real_score * 100 : (1 - item.real_score) * 100)}% conf.
                             </span>
                           </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Separator className="my-6" />
+
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-semibold">Recently Analyzed Videos</h3>
+                  {recentVideos.length > 0 && (
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/profile')} className="text-xs h-7">View All</Button>
+                  )}
+                </div>
+                {recentVideos.length === 0 ? (
+                  <div className="text-center p-10 bg-muted/30 rounded-lg">
+                    <Video className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground text-sm">No videos analyzed yet</p>
+                    <Button asChild size="sm" className="mt-3"><a href="/video-analysis">Analyze First Video</a></Button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {recentVideos.map((item) => (
+                      <div key={item.id} className="border border-border rounded-lg overflow-hidden">
+                        <div className="h-32 bg-muted flex items-center justify-center relative">
+                          <Video className="w-8 h-8 text-muted-foreground" />
+                          <div className="absolute top-2 right-2">
+                            <Badge variant={item.is_real ? 'default' : 'destructive'} className="text-xs">
+                              {item.is_real ? 'Authentic' : 'Fake'}
+                            </Badge>
+                          </div>
                           <div className="absolute bottom-2 left-2">
-                            <span className="bg-gray-800 bg-opacity-75 text-white text-xs px-2 py-1 rounded-full">
+                            <span className="bg-foreground/80 text-background text-xs px-1.5 py-0.5 rounded">
                               {item.duration_formatted}
                             </span>
                           </div>
                         </div>
                         <div className="p-3">
-                          <p className="text-sm font-medium text-gray-800">{item.original_filename}</p>
+                          <p className="text-sm font-medium truncate">{item.original_filename}</p>
                           <div className="flex justify-between items-center mt-1">
-                            <span className="text-xs text-gray-500">Scanned {formatTimeAgo(item.created_at)}</span>
-                            <span className="text-xs font-medium text-gray-700">
-                              {item.is_real ? 
-                                `${(item.real_score * 100).toFixed(0)}% authentic` : 
-                                `${(item.deepfake_probability * 100).toFixed(0)}% fake`
-                              }
+                            <span className="text-xs text-muted-foreground">{formatTimeAgo(item.created_at)}</span>
+                            <span className="text-xs font-medium">
+                              {item.is_real ? `${(item.real_score * 100).toFixed(0)}% real` : `${(item.deepfake_probability * 100).toFixed(0)}% fake`}
                             </span>
                           </div>
                         </div>
@@ -845,47 +392,41 @@ const DashboardContent = () => {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-        </div>
-      </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
 
-      {/* Quick actions section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-semibold mb-4 text-gray-800">Quick Actions</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <a 
-            href="/image-analysis"
-            className="flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium py-3 px-4 rounded-lg transition-colors"
-          >
-            <Image className="w-5 h-5 mr-2" />
-            Analyze New Image
-          </a>
-          <a 
-            href="/video-analysis"
-            className="flex items-center justify-center bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium py-3 px-4 rounded-lg transition-colors"
-          >
-            <Video className="w-5 h-5 mr-2" />
-            Analyze New Video
-          </a>
-          {hasAnalysisData() && (
-            <button 
-              onClick={() => navigate('/profile')}
-              className="flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium py-3 px-4 rounded-lg transition-colors"
-            >
-              <Users className="w-5 h-5 mr-2" />
-              View History
-            </button>
-          )}
-          <button 
-            onClick={handleRefresh}
-            className="flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium py-3 px-4 rounded-lg transition-colors"
-          >
-            <RefreshCw className="w-5 h-5 mr-2" />
-            Refresh Dashboard
-          </button>
-        </div>
-      </div>
+      {/* Quick actions */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Button asChild variant="outline" className="h-auto py-3 flex-col gap-1">
+              <a href="/image-analysis">
+                <Image className="w-5 h-5" />
+                <span className="text-xs">Analyze Image</span>
+              </a>
+            </Button>
+            <Button asChild variant="outline" className="h-auto py-3 flex-col gap-1">
+              <a href="/video-analysis">
+                <Video className="w-5 h-5" />
+                <span className="text-xs">Analyze Video</span>
+              </a>
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/profile')} className="h-auto py-3 flex-col gap-1">
+              <Users className="w-5 h-5" />
+              <span className="text-xs">View History</span>
+            </Button>
+            <Button variant="outline" onClick={handleRefresh} className="h-auto py-3 flex-col gap-1">
+              <RefreshCw className="w-5 h-5" />
+              <span className="text-xs">Refresh</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

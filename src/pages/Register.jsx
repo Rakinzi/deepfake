@@ -1,413 +1,202 @@
 import React, { useEffect, useState } from 'react';
-import * as framerMotion from 'framer-motion';
-const { motion } = framerMotion;
-import { Eye, EyeOff, Check, X } from 'lucide-react';
+import { Eye, EyeOff, Check, X, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AuthService from '../services/AuthService';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 
 const RegistrationPage = () => {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  
-  const { name, email, password, confirmPassword } = formData;
 
-  // Password validation
+  const { name, email, password, confirmPassword } = formData;
   const minLength = password.length >= 8;
   const hasUpperCase = /[A-Z]/.test(password);
   const hasLowerCase = /[a-z]/.test(password);
   const hasNumber = /[0-9]/.test(password);
   const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
   const passwordsMatch = password === confirmPassword;
+  const passwordStrength = [minLength, hasUpperCase, hasLowerCase, hasNumber, hasSpecialChar].filter(Boolean).length;
 
   useEffect(() => {
     document.title = 'Register';
-    const token = localStorage.getItem('token');
-    if (token) {
-      navigate('/dashboard');
-    }
-  }, [])
+    if (AuthService.isLoggedIn()) navigate('/dashboard');
+  }, []);
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
     setError('');
-  };
-
-  const handleNextStep = () => {
-    if (currentStep === 1 && name && email) {
-      setCurrentStep(2);
-    }
-  };
-
-  const handlePrevStep = () => {
-    if (currentStep === 2) {
-      setCurrentStep(1);
-    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!name || !email || !password || !confirmPassword) {
-      setError('Please fill in all fields');
-      return;
-    }
-    
-    if (!passwordsMatch) {
-      setError('Passwords do not match');
-      return;
-    }
-    
-    if (!(minLength && hasUpperCase && hasLowerCase && hasNumber && hasSpecialChar)) {
-      setError('Password does not meet all requirements');
-      return;
-    }
-    
+    if (!name || !email || !password || !confirmPassword) { setError('Please fill in all fields'); return; }
+    if (!passwordsMatch) { setError('Passwords do not match'); return; }
+    if (passwordStrength < 5) { setError('Password does not meet all requirements'); return; }
     setIsLoading(true);
     setError('');
-    
     try {
       await AuthService.register(name, email, password);
-      // Navigate to login page after successful registration
       navigate('/', { state: { message: 'Registration successful! Please log in.' } });
     } catch (err) {
-      setError(err.error || 'Registration failed. Please try again later.');
+      setError(err.error || 'Registration failed. Please try again.');
       setIsLoading(false);
     }
   };
 
   const ValidationItem = ({ isValid, text }) => (
-    <div className="flex items-center space-x-2">
-      {isValid ? (
-        <Check className="h-4 w-4 text-green-500" />
-      ) : (
-        <X className="h-4 w-4 text-gray-400" />
-      )}
-      <span className={`text-sm ${isValid ? 'text-green-500' : 'text-gray-500'}`}>
-        {text}
-      </span>
+    <div className="flex items-center gap-2">
+      {isValid ? <Check className="h-3.5 w-3.5 text-foreground" /> : <X className="h-3.5 w-3.5 text-muted-foreground" />}
+      <span className={`text-xs ${isValid ? 'text-foreground' : 'text-muted-foreground'}`}>{text}</span>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-white flex flex-col lg:flex-row">
-      {/* Left panel */}
-      <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.8 }}
-        className="w-full lg:w-1/2 flex flex-col justify-center p-8 md:p-16 order-2 lg:order-1"
-      >
+    <div className="min-h-screen bg-background flex flex-col lg:flex-row">
+      {/* Form panel */}
+      <div className="w-full lg:w-1/2 flex flex-col justify-center p-8 md:p-16 order-2 lg:order-1">
         <div className="max-w-md mx-auto w-full">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.8 }}
-            className="mb-10"
-          >
-            <h2 className="text-3xl font-bold text-black mb-2">Create an Account</h2>
-            <p className="text-gray-500">Join us today and unlock exclusive features</p>
-          </motion.div>
+          <div className="mb-8">
+            <h2 className="text-3xl font-bold text-foreground mb-1">Create an Account</h2>
+            <p className="text-muted-foreground">Join and unlock all detection features</p>
+          </div>
+
+          {/* Step progress */}
+          <div className="mb-8">
+            <Progress value={currentStep === 1 ? 50 : 100} className="h-1" />
+            <div className="flex justify-between mt-2">
+              <span className="text-xs font-medium text-foreground">Personal Info</span>
+              <span className={`text-xs font-medium ${currentStep === 2 ? 'text-foreground' : 'text-muted-foreground'}`}>Security</span>
+            </div>
+          </div>
 
           {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-6">
+            <div className="bg-destructive/10 text-destructive border border-destructive/20 p-3 rounded-md mb-6 text-sm">
               {error}
             </div>
           )}
 
-          <div className="mb-8">
-            <div className="flex justify-between items-center">
-              <div className="w-full">
-                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <motion.div 
-                    className="h-full bg-blue-600" 
-                    initial={{ width: "0%" }}
-                    animate={{ width: currentStep === 1 ? "50%" : "100%" }}
-                    transition={{ duration: 0.5 }}
-                  />
-                </div>
-                <div className="flex justify-between mt-2">
-                  <span className="text-sm font-medium text-blue-600">Personal Info</span>
-                  <span className={`text-sm font-medium ${currentStep === 2 ? 'text-blue-600' : 'text-gray-500'}`}>Security</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {currentStep === 1 ? (
               <>
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4, duration: 0.8 }}
-                >
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name
-                  </label>
-                  <input
-                    id="name"
-                    name="name"
-                    type="text"
-                    autoComplete="name"
-                    required
-                    value={name}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                    placeholder="Enter your full name"
-                  />
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5, duration: 0.8 }}
-                >
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address
-                  </label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    value={email}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                    placeholder="Enter your email address"
-                  />
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.6, duration: 0.8 }}
-                  className="pt-4"
-                >
-                  <button
-                    type="button"
-                    onClick={handleNextStep}
-                    disabled={!name || !email}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Continue
-                  </button>
-                </motion.div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input id="name" name="name" type="text" autoComplete="name" required value={name} onChange={handleChange} placeholder="John Doe" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="email">Email Address</Label>
+                  <Input id="email" name="email" type="email" autoComplete="email" required value={email} onChange={handleChange} placeholder="you@example.com" />
+                </div>
+                <Button type="button" onClick={() => name && email && setCurrentStep(2)} disabled={!name || !email} className="w-full">
+                  Continue
+                </Button>
               </>
             ) : (
               <>
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4, duration: 0.8 }}
-                >
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                    Password
-                  </label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="password">Password</Label>
                   <div className="relative">
-                    <input
-                      id="password"
-                      name="password"
-                      type={showPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      required
-                      value={password}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                      placeholder="Create a password"
+                    <Input
+                      id="password" name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password" required value={password} onChange={handleChange}
+                      placeholder="Create a strong password" className="pr-10"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-5 w-5 text-gray-400" />
-                      ) : (
-                        <Eye className="h-5 w-5 text-gray-400" />
-                      )}
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground">
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                </motion.div>
+                </div>
 
                 {password.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    transition={{ duration: 0.3 }}
-                    className="p-3 bg-gray-50 rounded-lg"
-                  >
-                    <div className="text-xs font-medium text-gray-700 mb-2">Password requirements:</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <ValidationItem isValid={minLength} text="At least 8 characters" />
-                      <ValidationItem isValid={hasUpperCase} text="At least 1 uppercase letter" />
-                      <ValidationItem isValid={hasLowerCase} text="At least 1 lowercase letter" />
-                      <ValidationItem isValid={hasNumber} text="At least 1 number" />
-                      <ValidationItem isValid={hasSpecialChar} text="At least 1 special character" />
+                  <div className="p-3 bg-muted rounded-md">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex gap-1 flex-1">
+                        {[1,2,3,4,5].map((n) => (
+                          <div key={n} className={`h-1 flex-1 rounded-full ${n <= passwordStrength ? 'bg-foreground' : 'bg-border'}`} />
+                        ))}
+                      </div>
+                      <span className="text-xs text-muted-foreground">{['', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'][passwordStrength]}</span>
                     </div>
-                  </motion.div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      <ValidationItem isValid={minLength} text="At least 8 characters" />
+                      <ValidationItem isValid={hasUpperCase} text="1 uppercase letter" />
+                      <ValidationItem isValid={hasLowerCase} text="1 lowercase letter" />
+                      <ValidationItem isValid={hasNumber} text="1 number" />
+                      <ValidationItem isValid={hasSpecialChar} text="1 special character" />
+                    </div>
+                  </div>
                 )}
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5, duration: 0.8 }}
-                >
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                    Confirm Password
-                  </label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
                   <div className="relative">
-                    <input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type={showConfirmPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      required
-                      value={confirmPassword}
-                      onChange={handleChange}
-                      className={`w-full px-4 py-3 rounded-lg border ${
-                        confirmPassword && !passwordsMatch
-                          ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                          : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-                      } outline-none transition-all`}
-                      placeholder="Confirm your password"
+                    <Input
+                      id="confirmPassword" name="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      autoComplete="new-password" required value={confirmPassword} onChange={handleChange}
+                      placeholder="Repeat your password" className="pr-10"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="h-5 w-5 text-gray-400" />
-                      ) : (
-                        <Eye className="h-5 w-5 text-gray-400" />
-                      )}
+                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground">
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                   {confirmPassword && !passwordsMatch && (
-                    <p className="text-sm text-red-500 mt-1">Passwords do not match</p>
+                    <p className="text-xs text-destructive">Passwords do not match</p>
                   )}
-                </motion.div>
+                </div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.6, duration: 0.8 }}
-                  className="flex gap-4 pt-4"
-                >
-                  <button
-                    type="button"
-                    onClick={handlePrevStep}
-                    className="w-1/3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-3 px-4 rounded-lg transition-all"
-                  >
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" onClick={() => setCurrentStep(1)} className="w-1/3">
                     Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isLoading || !passwordsMatch || !password || !confirmPassword}
-                    className="w-2/3 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? (
-                      <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    ) : (
-                      "Create Account"
-                    )}
-                  </button>
-                </motion.div>
+                  </Button>
+                  <Button type="submit" disabled={isLoading || !passwordsMatch || !password} className="w-2/3">
+                    {isLoading ? <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" /> : 'Create Account'}
+                  </Button>
+                </div>
               </>
             )}
           </form>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7, duration: 0.8 }}
-            className="mt-8 text-center"
-          >
-            <p className="text-gray-600">
-              Already have an account?{" "}
-              <a href="/" className="text-blue-600 hover:text-blue-800 font-medium">
-                Sign In
-              </a>
-            </p>
-          </motion.div>
+          <p className="mt-8 text-center text-sm text-muted-foreground">
+            Already have an account?{' '}
+            <a href="/" className="font-medium text-foreground hover:underline">Sign In</a>
+          </p>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Right panel - decorative */}
-      <motion.div 
-        initial={{ opacity: 0, x: 50 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.8 }}
-        className="lg:w-1/2 bg-gradient-to-br from-blue-600 to-blue-800 order-1 lg:order-2 relative overflow-hidden"
-      >
-        <div className="absolute inset-0">
-          {Array.from({ length: 20 }).map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute rounded-full bg-blue-500 opacity-10"
-              style={{
-                width: `${Math.random() * 300 + 50}px`,
-                height: `${Math.random() * 300 + 50}px`,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-              }}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ 
-                duration: Math.random() * 2 + 1,
-                delay: i * 0.1,
-                repeat: Infinity,
-                repeatType: "reverse",
-                repeatDelay: Math.random() * 5
-              }}
+      {/* Right decorative panel */}
+      <div className="lg:w-1/2 bg-foreground order-1 lg:order-2 relative overflow-hidden min-h-48 lg:min-h-screen">
+        <div className="absolute inset-0 opacity-5">
+          {Array.from({ length: 15 }).map((_, i) => (
+            <div key={i} className="absolute rounded-full border border-background"
+              style={{ width: `${Math.random() * 250 + 50}px`, height: `${Math.random() * 250 + 50}px`, left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
             />
           ))}
         </div>
-        
-        <div className="z-10 p-12 h-full flex flex-col justify-center items-center relative">
-          <div className="lg:max-w-md text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5, duration: 0.8 }}
-              className="mb-8"
-            >
-              <h2 className="text-3xl font-bold text-white mb-4">Join our AI-powered deepfake detection platform</h2>
-              <p className="text-blue-100 text-lg">
-                Create an account to access state-of-the-art image analysis tools and protect yourself from AI-generated content.
-              </p>
-            </motion.div>
-            
-            <motion.div 
-              className="grid grid-cols-2 gap-4"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7, duration: 0.8 }}
-            >
-              {['AI detection technology', 'Image manipulation alerts', 'Secure data storage', 'Advanced analytics'].map((feature, i) => (
-                <div key={i} className="bg-blue-700 bg-opacity-30 p-4 rounded-lg flex items-center space-x-2">
-                  <Check className="h-5 w-5 text-blue-200 flex-shrink-0" />
-                  <span className="text-blue-100 text-sm">{feature}</span>
-                </div>
-              ))}
-            </motion.div>
+        <div className="relative z-10 p-12 h-full flex flex-col justify-center items-center">
+          <ShieldCheck className="w-16 h-16 text-background/80 mb-6" />
+          <h2 className="text-2xl font-bold text-background mb-4 text-center">AI-Powered Deepfake Detection</h2>
+          <p className="text-background/70 text-center max-w-sm mb-8">
+            Create an account to access state-of-the-art image analysis tools.
+          </p>
+          <div className="grid grid-cols-2 gap-3 w-full max-w-xs">
+            {['AI Detection', 'Image Alerts', 'Secure Storage', 'Analytics'].map((f) => (
+              <div key={f} className="border border-background/20 rounded-lg p-3 flex items-center gap-2">
+                <Check className="h-4 w-4 text-background/60 shrink-0" />
+                <span className="text-background/80 text-sm">{f}</span>
+              </div>
+            ))}
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };
