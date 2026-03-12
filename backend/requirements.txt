@@ -13,3 +13,4 @@ numpy>=1.19.5
 deepface>=0.0.78
 retina-face>=0.0.13
 gdown>=4.5.1
+tf-keras

@@ -19,7 +19,7 @@ from video_routes import video_bp
 
 
 # Load environment variables
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)  # Enable CORS with credentials support
@@ -42,7 +42,7 @@ if not os.path.exists(UPLOAD_FOLDER):
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Hugging Face API Configuration
-HF_API_URL = "https://api-inference.huggingface.co/models/dima806/deepfake_vs_real_image_detection"
+HF_API_URL = "https://router.huggingface.co/hf-inference/models/dima806/deepfake_vs_real_image_detection"
 HF_API_KEY = os.getenv('HF_API_KEY')  # Get API key from environment variables
 if not HF_API_KEY:
     print("WARNING: HF_API_KEY not found in environment variables. API calls will fail.")
