@@ -11,6 +11,31 @@ from dotenv import load_dotenv
 import bcrypt
 import requests
 from deepface import DeepFace
+from PIL import Image as PILImage
+import io
+
+# --- Local model setup ---
+_local_pipeline = None
+_local_model_error = None
+
+def _load_local_pipeline():
+    global _local_pipeline, _local_model_error
+    if _local_pipeline is not None or _local_model_error is not None:
+        return
+    try:
+        from transformers import pipeline
+        print("Loading local deepfake detection model (first run may download ~500MB)...")
+        _local_pipeline = pipeline(
+            "image-classification",
+            model="dima806/deepfake_vs_real_image_detection"
+        )
+        print("Local model loaded successfully.")
+    except Exception as e:
+        _local_model_error = str(e)
+        print(f"WARNING: Could not load local model: {e}. Will fall back to HF Inference API.")
+
+# Attempt to load on startup (non-fatal if it fails)
+_load_local_pipeline()
 
 # Import routes
 from user_routes import user_bp
@@ -75,79 +100,98 @@ def get_db_connection():
         print(f"Error getting database connection: {e}")
         raise
 
-# Function to analyze image using Hugging Face Inference API
+def _parse_classification_result(api_result):
+    """Parse label/score list from either local pipeline or HF API into (is_real, real_score)."""
+    is_real = False
+    real_score = 0.0
+
+    if isinstance(api_result, list) and len(api_result) > 0 and "label" in api_result[0]:
+        for item in api_result:
+            if "real" in item["label"].lower():
+                real_score = item["score"]
+                is_real = real_score >= 0.5
+                break
+            elif "fake" in item["label"].lower() and real_score == 0.0:
+                real_score = 1.0 - item["score"]
+                is_real = real_score >= 0.5
+    elif isinstance(api_result, dict):
+        if "real" in api_result:
+            real_score = api_result["real"]
+            is_real = real_score >= 0.5
+        elif "fake" in api_result:
+            real_score = 1.0 - api_result["fake"]
+            is_real = real_score >= 0.5
+
+    return is_real, real_score
+
+
+def _classify_with_local_model(img_data):
+    """Run inference locally. Returns raw classification list or raises."""
+    pil_img = PILImage.open(io.BytesIO(img_data)).convert("RGB")
+    result = _local_pipeline(pil_img)
+    print(f"Local model result: {result}")
+    return result
+
+
+def _classify_with_hf_api(img_data):
+    """Run inference via HF Inference API. Returns raw classification list or raises."""
+    response = requests.post(
+        HF_API_URL,
+        headers={
+            "Content-Type": "image/jpeg",
+            "Authorization": f"Bearer {HF_API_KEY}"
+        },
+        data=img_data,
+        timeout=30
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"HF API error {response.status_code}: {response.text}")
+    api_result = response.json()
+    print(f"HF API result: {api_result}")
+    return api_result
+
+
+# Function to analyze image — local model first, HF Inference API as fallback
 def analyze_image_with_huggingface(img_data):
     """
-    Send the raw image directly to the Hugging Face API without any preprocessing
-    Returns the analysis results
+    Classify the image using the local transformers pipeline when available,
+    falling back to the Hugging Face Inference API on any failure.
+    Returns the analysis result dict.
     """
     try:
-        # Make API call with the raw image data
-        response = requests.post(
-            HF_API_URL,
-            headers={
-                "Content-Type": "image/jpeg", 
-                "Authorization": f"Bearer {HF_API_KEY}"
-            },
-            data=img_data,
-            timeout=30
-        )
-        
-        # Check for successful response
-        if response.status_code != 200:
-            print(f"API error: Status code {response.status_code}")
-            print(f"Response content: {response.text}")
-            return {
-                'success': False,
-                'error': f'API error: {response.text}'
-            }
-            
-        # Get the API response
-        api_result = response.json()
-        print(f"Raw API response: {api_result}")
-        
-        # Parse the result to determine if real or fake
-        is_real = False
-        real_score = 0.0
-        
-        # Handle different response formats
-        # Format 1: List of classifications with label and score
-        if isinstance(api_result, list) and len(api_result) > 0 and "label" in api_result[0]:
-            for item in api_result:
-                if "real" in item["label"].lower():
-                    real_score = item["score"]
-                    is_real = real_score >= 0.5
-                elif "fake" in item["label"].lower() and real_score == 0.0:
-                    # Only use fake score if we haven't found a real score
-                    real_score = 1.0 - item["score"]
-                    is_real = real_score >= 0.5
-        
-        # Format 2: Direct score values
-        elif isinstance(api_result, dict):
-            if "real" in api_result:
-                real_score = api_result["real"]
-                is_real = real_score >= 0.5
-            elif "fake" in api_result:
-                real_score = 1.0 - api_result["fake"]
-                is_real = real_score >= 0.5
-        
-        # Load image to get dimensions for display
+        # --- Step 1: classify (local → API fallback) ---
+        raw_result = None
+        inference_source = None
+
+        if _local_pipeline is not None:
+            try:
+                raw_result = _classify_with_local_model(img_data)
+                inference_source = 'dima806/deepfake_vs_real_image_detection (local)'
+            except Exception as local_err:
+                print(f"Local model inference failed ({local_err}), falling back to HF API...")
+
+        if raw_result is None:
+            if not HF_API_KEY:
+                return {'success': False, 'error': 'Local model unavailable and HF_API_KEY not set.'}
+            raw_result = _classify_with_hf_api(img_data)
+            inference_source = 'dima806/deepfake_vs_real_image_detection (HF Inference API fallback)'
+
+        is_real, real_score = _parse_classification_result(raw_result)
+
+        # --- Step 2: image quality metrics ---
         nparr = np.frombuffer(img_data, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        # Get image qualities
         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         sharpness = float(cv2.Laplacian(img_gray, cv2.CV_64F).var())
         brightness = float(np.mean(img_gray))
         contrast = float(np.std(img_gray))
-        
-        # Try to get facial attributes
+
+        # --- Step 3: facial attribute analysis (DeepFace) ---
         facial_analysis = None
         try:
-            analysis = DeepFace.analyze(img, enforce_detection=False, 
-                                      actions=['emotion', 'age', 'race'], 
-                                      silent=True)
-            
+            analysis = DeepFace.analyze(img, enforce_detection=False,
+                                        actions=['emotion', 'age', 'race'],
+                                        silent=True)
             if isinstance(analysis, list) and len(analysis) > 0:
                 facial_analysis = {
                     'age': analysis[0].get('age'),
@@ -157,23 +201,16 @@ def analyze_image_with_huggingface(img_data):
                 print(f"Facial analysis: {facial_analysis}")
         except Exception as e:
             print(f"Error in facial analysis: {e}")
-            facial_analysis = None
-        
-        # Return complete analysis result
-        result = {
+
+        return {
             'success': True,
             'faces': [
                 {
                     'is_real': is_real,
                     'real_score': float(real_score),
                     'spoofing_type': 'unknown' if is_real else 'AI-generated',
-                    'facial_area': {
-                        'x': 0,
-                        'y': 0,
-                        'w': img.shape[1],
-                        'h': img.shape[0]
-                    },
-                    'confidence': float(real_score if is_real else 1-real_score),
+                    'facial_area': {'x': 0, 'y': 0, 'w': img.shape[1], 'h': img.shape[0]},
+                    'confidence': float(real_score if is_real else 1 - real_score),
                     'quality': {
                         'sharpness': sharpness,
                         'brightness': brightness,
@@ -187,20 +224,15 @@ def analyze_image_with_huggingface(img_data):
                 'brightness': brightness,
                 'contrast': contrast
             },
-            'model_used': 'dima806/deepfake_vs_real_image_detection (HF Inference API)',
-            'raw_api_response': api_result
+            'model_used': inference_source,
+            'raw_api_response': raw_result
         }
-        
-        return result
-        
+
     except Exception as e:
-        print(f"Error in analyzing image with Hugging Face API: {e}")
+        print(f"Error in analyze_image_with_huggingface: {e}")
         import traceback
         traceback.print_exc()
-        return {
-            'success': False,
-            'error': f'Analysis error: {str(e)}'
-        }
+        return {'success': False, 'error': f'Analysis error: {str(e)}'}
 
 # Initialize database tables
 def init_db():
